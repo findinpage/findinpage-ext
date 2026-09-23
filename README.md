@@ -4,22 +4,35 @@ PageSift is a Chrome extension that replaces the ordinary find-in-page interacti
 
 The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadcn components. The page-search panel is mounted in a Shadow DOM so its styles remain isolated from the websites it runs on.
 
-## MVP behavior
+## Features
 
-- Press `Command+F` on macOS or `Ctrl+F` on Windows/Linux.
-- Press the shortcut again to close PageSift.
-- Click the PageSift toolbar icon to show or hide search in the current tab.
-- Type one plain-text query in the PageSift overlay.
-- Review matches in document order with surrounding context.
-- Select a result to center it in the viewport and highlight the exact match.
-- Every match is highlighted automatically; use the up/down controls to move the active match.
-- Use the keyboard's Up and Down arrow keys while PageSift is focused to move between results.
-- Press `Escape` to close PageSift and remove the highlight.
+- **A familiar entry point:** open or close PageSift with `Command+F` on macOS,
+  `Ctrl+F` on Windows/Linux, or the extension toolbar icon. Press `Escape` to
+  close the panel.
+- **Context-rich results:** see every match in document order, numbered and
+  shown with the surrounding text instead of stepping through matches one at a
+  time.
+- **Fast navigation:** click a result, use the previous/next buttons, or press
+  the Up and Down arrow keys while the panel is focused. Choosing a result
+  centers its source text in the viewport.
+- **Clear page highlights:** all matches are highlighted on the page, with the
+  active match shown in a distinct style. Highlights disappear when the panel
+  closes.
+- **Live page updates:** while the panel is open, results refresh when page
+  content changes or scrolling reveals newly rendered content. PageSift keeps
+  the active result and result-list position when it can still identify them.
+- **Per-tab state:** each tab retains its own query, selected result, and result
+  list. Closing and reopening the panel preserves that state and refreshes the
+  search against the current page.
+- **Theme-aware isolated UI:** the panel follows the page or system light/dark
+  preference and runs inside a Shadow DOM so website styles do not leak into
+  it.
+- **Local and private:** searches run entirely in the current tab. Page text and
+  queries are never sent over the network.
 
-Closing PageSift preserves the current query and selection. Reopening it refreshes the results against the current page.
-
-Search runs locally in the current tab. Page text and queries are never sent over the network.
-Each tab keeps its own open state, query, and results when switching between tabs.
+Search is case-insensitive and treats the query as literal text. PageSift shows
+up to 500 matches, including context drawn from the nearest paragraph, list
+item, table cell, heading, blockquote, or preformatted block when available.
 
 ## Development
 
