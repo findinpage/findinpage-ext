@@ -12,16 +12,15 @@ const buttonVariants = cva(
         outline: 'border-border bg-input/30 hover:bg-input/50 hover:text-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-muted',
         ghost: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-        result:
-          'justify-start rounded-none border-b border-border bg-background text-foreground hover:bg-muted aria-current:bg-muted aria-current:shadow-[inset_2px_0_0_var(--primary)]',
+        result: 'pagesift-result',
       },
       size: {
         default: 'h-9 gap-1.5 px-3',
         xs: "h-6 gap-1 px-2.5 text-xs [&_svg:not([class*='size-'])]:size-3",
         sm: 'h-8 gap-1 px-3',
         icon: 'size-9',
-        panelIcon: "size-10 [&_svg:not([class*='size-'])]:size-5",
-        result: 'min-h-14 w-full px-3 py-2',
+        panelIcon: 'pagesift-icon-button',
+        result: '',
       },
     },
     defaultVariants: {

@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ArrowDown01Icon,
-  ArrowUp01Icon,
-  Cancel01Icon,
-  Search01Icon,
-} from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -40,6 +34,7 @@ export function App({ onReady }: AppProps) {
   const lastSearchedQueryRef = useRef<string | undefined>(undefined);
   const hasOpenedRef = useRef(false);
   const restoreScrollRef = useRef(false);
+  const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
 
   useEffect(() => installPageHighlightStyles(), []);
 
@@ -95,25 +90,63 @@ export function App({ onReady }: AppProps) {
     }
   }, [focusInput, isOpen]);
 
+  const runSearch = useCallback(
+    (preservePosition: boolean) => {
+      const previousIndex = results.findIndex((result) => result.id === activeId);
+      if (preservePosition) {
+        pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
+      }
+
+      const response = searchRef.current.search(query);
+      lastSearchedQueryRef.current = query;
+      setResults(response.results);
+      setTruncated(response.truncated);
+
+      const nextIndex = preservePosition && previousIndex >= 0 ? previousIndex : 0;
+      const nextResult = response.results[Math.min(nextIndex, response.results.length - 1)];
+      setActiveId(
+        nextResult && searchRef.current.select(nextResult.id, { scroll: false })
+          ? nextResult.id
+          : undefined,
+      );
+    },
+    [activeId, query, results],
+  );
+
   useEffect(() => {
     if (!isOpen) return;
     if (lastSearchedQueryRef.current === query) return;
 
     const timeout = window.setTimeout(() => {
-      const response = searchRef.current.search(query);
-      lastSearchedQueryRef.current = query;
-      setResults(response.results);
-      setTruncated(response.truncated);
-      const firstResult = response.results[0];
-      setActiveId(
-        firstResult && searchRef.current.select(firstResult.id, { scroll: false })
-          ? firstResult.id
-          : undefined,
-      );
+      runSearch(false);
     }, 120);
 
     return () => window.clearTimeout(timeout);
-  }, [isOpen, query]);
+  }, [isOpen, query, runSearch]);
+
+  useEffect(() => {
+    if (!isOpen || !query.trim()) return;
+
+    let refreshTimeout: number | undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
+      refreshTimeout = window.setTimeout(() => runSearch(true), 250);
+    };
+
+    const observer = new MutationObserver(scheduleRefresh);
+    observer.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    window.addEventListener('scroll', scheduleRefresh, { capture: true, passive: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', scheduleRefresh, { capture: true });
+      if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
+    };
+  }, [isOpen, query, runSearch]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -154,6 +187,12 @@ export function App({ onReady }: AppProps) {
 
   useEffect(() => {
     if (!activeId) return;
+    if (pendingResultsScrollTopRef.current !== undefined) {
+      const scrollTop = pendingResultsScrollTopRef.current;
+      pendingResultsScrollTopRef.current = undefined;
+      requestAnimationFrame(() => resultsRef.current?.scrollTo({ top: scrollTop }));
+      return;
+    }
     const activeResult = resultsRef.current?.querySelector<HTMLElement>(
       `[data-result-id="${CSS.escape(activeId)}"]`,
     );
@@ -182,11 +221,11 @@ export function App({ onReady }: AppProps) {
 
   return (
     <section
-      className="pointer-events-auto fixed top-3 right-3 flex max-h-[min(68vh,600px)] w-[min(396px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg"
+      className="pagesift-panel"
       aria-label="PageSift page search"
       onKeyDown={handlePanelKeyDown}
     >
-      <div className="flex min-h-15 items-center gap-2 border-b border-border bg-card px-4 focus-within:ring-1 focus-within:ring-ring">
+      <div className="pagesift-toolbar">
         <Input
           ref={inputRef}
           type="search"
@@ -199,12 +238,12 @@ export function App({ onReady }: AppProps) {
           onChange={(event) => setQuery(event.target.value)}
         />
         <span
-          className="min-w-10 shrink-0 text-center text-xs text-muted-foreground tabular-nums"
+          className="pagesift-counter"
           aria-live="polite"
         >
           {currentResult}/{totalResults}
         </span>
-        <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <span className="pagesift-divider" aria-hidden="true" />
         <Button
           variant="ghost"
           size="panelIcon"
@@ -214,12 +253,7 @@ export function App({ onReady }: AppProps) {
           disabled={previousDisabled}
           onClick={() => navigateResult(-1)}
         >
-          <HugeiconsIcon
-            icon={ArrowUp01Icon}
-            strokeWidth={2.2}
-            data-icon="inline-start"
-            aria-hidden="true"
-          />
+          <ChevronUp data-icon="inline-start" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
@@ -230,12 +264,7 @@ export function App({ onReady }: AppProps) {
           disabled={nextDisabled}
           onClick={() => navigateResult(1)}
         >
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            strokeWidth={2.2}
-            data-icon="inline-start"
-            aria-hidden="true"
-          />
+          <ChevronDown data-icon="inline-start" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
@@ -245,35 +274,30 @@ export function App({ onReady }: AppProps) {
           aria-label="Close PageSift"
           title="Close"
         >
-          <HugeiconsIcon
-            icon={Cancel01Icon}
-            strokeWidth={2.2}
-            data-icon="inline-start"
-            aria-hidden="true"
-          />
+          <X data-icon="inline-start" aria-hidden="true" />
         </Button>
       </div>
 
       <div
         ref={resultsRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]"
+        className="pagesift-results"
         role="list"
         aria-label="Search results"
       >
         {!hasQuery && (
-          <div className="grid min-h-36 place-items-center content-center gap-2.5 px-8 py-6 text-center text-xs text-muted-foreground">
-            <div className="grid size-8 place-items-center rounded-4xl bg-muted" aria-hidden="true">
-              <HugeiconsIcon icon={Search01Icon} size={14} strokeWidth={1.8} />
+          <div className="pagesift-empty">
+            <div className="pagesift-empty-icon" aria-hidden="true">
+              <Search />
             </div>
-            <p className="m-0 max-w-56 leading-5">
+            <p className="pagesift-empty-copy">
               Matches will appear here with their surrounding context.
             </p>
           </div>
         )}
 
         {hasQuery && results.length === 0 && (
-          <div className="grid min-h-24 place-items-center px-8 py-5 text-center text-xs text-muted-foreground">
-            <p className="m-0 max-w-56 leading-5">No matches on this page.</p>
+          <div className="pagesift-empty pagesift-empty--compact">
+            <p className="pagesift-empty-copy">No matches on this page.</p>
           </div>
         )}
 
@@ -285,22 +309,18 @@ export function App({ onReady }: AppProps) {
             size="result"
             role="listitem"
             data-result-id={result.id}
-            className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2 text-left text-[13px] font-normal whitespace-normal"
             aria-current={activeId === result.id ? 'true' : undefined}
             onClick={() => selectResult(result)}
           >
-            <span
-              className="mt-px inline-flex h-5 min-w-5 items-center justify-center justify-self-center rounded-4xl bg-muted px-1 text-[10px] font-medium text-muted-foreground tabular-nums"
-            >
+            <span className="pagesift-index">
               {result.order}
             </span>
-            <span className="min-w-0 [overflow-wrap:anywhere] leading-[1.45]">
+            <span className="pagesift-result-copy">
               {result.before}
               <mark
                 className={cn(
-                  'bg-match px-0.5 font-medium text-match-foreground',
-                  activeId === result.id &&
-                    'bg-match-active underline decoration-match-decoration decoration-2',
+                  'pagesift-match',
+                  activeId === result.id && 'pagesift-match--active',
                 )}
               >
                 {result.match}

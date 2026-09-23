@@ -55,7 +55,55 @@
   --match-active: #ff9632;
   --match-foreground: #171717;
   --match-decoration: #9a6700;
-  --radius: 0.625rem;
+  /* Keep extension geometry independent from the host document's root font size. */
+  --radius: 9px;
+  --pagesift-panel-offset: 12px;
+  --pagesift-panel-width: 368px;
+  --pagesift-panel-max-height: min(72vh, 620px);
+  --pagesift-panel-border-width: 1px;
+  --pagesift-surface-radius: var(--radius);
+  --pagesift-floating-shadow:
+    0 4px 10px rgb(0 0 0 / 12%),
+    0 14px 36px rgb(0 0 0 / 20%);
+  --pagesift-toolbar-shadow: 0 2px 7px rgb(0 0 0 / 7%);
+  --pagesift-focus-width: 2px;
+  --pagesift-focus-radius: calc(var(--pagesift-surface-radius) - var(--pagesift-panel-border-width));
+  --pagesift-focus-background: var(--card);
+  --pagesift-toolbar-height: 52px;
+  --pagesift-toolbar-padding: 14px;
+  --pagesift-toolbar-gap: 6px;
+  --pagesift-input-height: 38px;
+  --pagesift-input-font-size: 15px;
+  --pagesift-counter-width: 36px;
+  --pagesift-counter-font-size: 12px;
+  --pagesift-divider-height: 18px;
+  --pagesift-control-size: 36px;
+  --pagesift-control-icon-size: 18px;
+  --pagesift-result-min-height: 60px;
+  --pagesift-result-padding-block: 10px;
+  --pagesift-result-padding-inline: 14px;
+  --pagesift-result-index-column: 30px;
+  --pagesift-result-gap: 8px;
+  --pagesift-result-font-size: 14px;
+  --pagesift-result-line-height: 1.55;
+  --pagesift-index-height: 24px;
+  --pagesift-index-min-width: 24px;
+  --pagesift-index-padding: 6px;
+  --pagesift-index-font-size: 11px;
+  --pagesift-active-indicator-width: 3px;
+  --pagesift-active-indicator-offset: 6px;
+  --pagesift-active-indicator-inset: 12px;
+  --pagesift-empty-min-height: 160px;
+  --pagesift-empty-compact-height: 112px;
+  --pagesift-empty-padding-block: 28px;
+  --pagesift-empty-padding-inline: 32px;
+  --pagesift-empty-gap: 12px;
+  --pagesift-empty-icon-size: 36px;
+  --pagesift-empty-glyph-size: 17px;
+  --pagesift-empty-copy-width: 240px;
+  --pagesift-empty-font-size: 14px;
+  --pagesift-empty-line-height: 24px;
+  --pagesift-match-padding: 2px;
   color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 13px;
@@ -81,6 +129,10 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: #8ab4f8;
+    --pagesift-floating-shadow:
+      0 4px 12px rgb(0 0 0 / 32%),
+      0 16px 42px rgb(0 0 0 / 52%);
+    --pagesift-toolbar-shadow: 0 2px 7px rgb(0 0 0 / 20%);
   }
 }
 
@@ -93,6 +145,219 @@
   button,
   input {
     font: inherit;
+  }
+}
+
+.pagesift-panel {
+    pointer-events: auto;
+    position: fixed;
+    top: var(--pagesift-panel-offset);
+    right: var(--pagesift-panel-offset);
+    display: flex;
+    width: min(var(--pagesift-panel-width), calc(100vw - 2 * var(--pagesift-panel-offset)));
+    max-height: var(--pagesift-panel-max-height);
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    border: var(--pagesift-panel-border-width) solid var(--border);
+    border-radius: var(--pagesift-surface-radius);
+    background: var(--card);
+    box-shadow: var(--pagesift-floating-shadow);
+    color: var(--card-foreground);
+}
+
+.pagesift-toolbar {
+    display: flex;
+    min-height: var(--pagesift-toolbar-height);
+    align-items: center;
+    gap: var(--pagesift-toolbar-gap);
+    padding-inline: var(--pagesift-toolbar-padding);
+    position: relative;
+    z-index: 1;
+    border: 0;
+    border-radius: var(--pagesift-focus-radius);
+    background: var(--card);
+    box-shadow: var(--pagesift-toolbar-shadow);
+    overflow: hidden;
+}
+
+.pagesift-toolbar::after {
+  position: absolute;
+  inset: 0;
+  border: var(--pagesift-focus-width) solid transparent;
+  border-radius: var(--pagesift-focus-radius);
+  content: "";
+  pointer-events: none;
+}
+
+.pagesift-toolbar:focus-within {
+  background: var(--pagesift-focus-background);
+  box-shadow: none;
+}
+
+.pagesift-toolbar:focus-within::after {
+  border-color: var(--ring);
+}
+
+.pagesift-input {
+    height: var(--pagesift-input-height);
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-size: var(--pagesift-input-font-size);
+    font-weight: 500;
+}
+
+.pagesift-counter {
+    min-width: var(--pagesift-counter-width);
+    flex-shrink: 0;
+    color: var(--muted-foreground);
+    font-size: var(--pagesift-counter-font-size);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.pagesift-divider {
+    width: 1px;
+    height: var(--pagesift-divider-height);
+    flex-shrink: 0;
+    background: var(--border);
+}
+
+.pagesift-icon-button {
+    width: var(--pagesift-control-size);
+    height: var(--pagesift-control-size);
+}
+
+.pagesift-icon-button svg {
+    width: var(--pagesift-control-icon-size);
+    height: var(--pagesift-control-icon-size);
+    stroke-width: 2.25;
+}
+
+.pagesift-results {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: var(--card);
+    box-shadow: none;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.pagesift-result {
+    position: relative;
+    display: grid;
+    min-height: var(--pagesift-result-min-height);
+    width: 100%;
+    grid-template-columns: var(--pagesift-result-index-column) minmax(0, 1fr);
+    align-items: start;
+    justify-content: start;
+    gap: var(--pagesift-result-gap);
+    padding: var(--pagesift-result-padding-block) var(--pagesift-result-padding-inline);
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: var(--pagesift-result-font-size);
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+}
+
+.pagesift-result[aria-current="true"] {
+    background: var(--muted);
+}
+
+.pagesift-result[aria-current="true"]::before {
+    position: absolute;
+    top: var(--pagesift-active-indicator-inset);
+    bottom: var(--pagesift-active-indicator-inset);
+    left: var(--pagesift-active-indicator-offset);
+    width: var(--pagesift-active-indicator-width);
+    border-radius: var(--pagesift-active-indicator-width);
+    background: var(--primary);
+    content: "";
+}
+
+.pagesift-index {
+    display: inline-flex;
+    height: var(--pagesift-index-height);
+    min-width: var(--pagesift-index-min-width);
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    padding-inline: var(--pagesift-index-padding);
+    border-radius: var(--radius-4xl);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: var(--pagesift-index-font-size);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.pagesift-result-copy {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: var(--pagesift-result-line-height);
+}
+
+.pagesift-match {
+    padding-inline: var(--pagesift-match-padding);
+    background: var(--match);
+    color: var(--match-foreground);
+    font-weight: 500;
+}
+
+.pagesift-match--active {
+    background: var(--match-active);
+    text-decoration: underline;
+    text-decoration-color: var(--match-decoration);
+    text-decoration-thickness: 2px;
+}
+
+.pagesift-empty {
+    display: grid;
+    min-height: var(--pagesift-empty-min-height);
+    place-items: center;
+    align-content: center;
+    gap: var(--pagesift-empty-gap);
+    padding: var(--pagesift-empty-padding-block) var(--pagesift-empty-padding-inline);
+    color: var(--muted-foreground);
+    font-size: var(--pagesift-empty-font-size);
+    text-align: center;
+}
+
+.pagesift-empty--compact {
+    min-height: var(--pagesift-empty-compact-height);
+}
+
+.pagesift-empty-icon {
+    display: grid;
+    width: var(--pagesift-empty-icon-size);
+    height: var(--pagesift-empty-icon-size);
+    place-items: center;
+    border-radius: var(--radius-4xl);
+    background: var(--muted);
+}
+
+.pagesift-empty-icon svg {
+    width: var(--pagesift-empty-glyph-size);
+    height: var(--pagesift-empty-glyph-size);
+}
+
+.pagesift-empty-copy {
+    max-width: var(--pagesift-empty-copy-width);
+    margin: 0;
+    line-height: var(--pagesift-empty-line-height);
+}
+
+@media (hover: hover) {
+  .pagesift-result:hover {
+    background: var(--muted);
   }
 }
 

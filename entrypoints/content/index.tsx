@@ -72,7 +72,12 @@ export default defineContentScript({
         shadowHost.style.padding = '0';
         shadowHost.style.border = '0';
         shadowHost.style.background = 'transparent';
+        shadowHost.style.fontSize = '13px';
+        shadowHost.style.lineHeight = 'normal';
         shadowHost.style.pointerEvents = 'none';
+        shadowHost.style.setProperty('text-size-adjust', 'none');
+        shadowHost.style.setProperty('-webkit-text-size-adjust', 'none');
+        shadowHost.style.setProperty('zoom', '1');
 
         if ('showPopover' in shadowHost) {
           shadowHost.setAttribute('popover', 'manual');

@@ -11,7 +11,7 @@ const inputVariants = cva(
       variant: {
         default:
           'h-9 rounded-4xl border border-input bg-input/30 px-3 py-1 text-sm focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        bare: 'h-11 border-0 bg-transparent px-0 text-base font-medium',
+        bare: 'pagesift-input',
       },
     },
     defaultVariants: {
