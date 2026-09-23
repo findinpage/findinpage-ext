@@ -35,6 +35,7 @@
 }
 
 :host {
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -113,26 +114,28 @@
 
 @media (prefers-color-scheme: dark) {
   :host {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --primary: #8ab4f8;
-    --primary-foreground: #202124;
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    color-scheme: dark;
+    --background: hsl(0 0% 7.04%);
+    --foreground: hsl(0 0% 92%);
+    --card: hsl(0 0% 9.8%);
+    --card-foreground: hsl(0 0% 98%);
+    --primary: hsl(0 0% 98%);
+    --primary-foreground: hsl(0 0% 9%);
+    --secondary: hsl(0 0% 12.9%);
+    --secondary-foreground: hsl(0 0% 92%);
+    --muted: hsl(0 0% 12.9%);
+    --muted-foreground: hsl(0 0% 70% / 80%);
+    --accent: hsl(0 0% 40.9% / 30%);
+    --accent-foreground: hsl(0 0% 90%);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: #8ab4f8;
+    --border: hsl(0 0% 40% / 20%);
+    --input: hsl(0 0% 40.9% / 30%);
+    --ring: hsl(0 0% 54.9%);
     --pagesift-floating-shadow:
-      0 4px 12px rgb(0 0 0 / 32%),
-      0 16px 42px rgb(0 0 0 / 52%);
-    --pagesift-toolbar-shadow: 0 2px 7px rgb(0 0 0 / 20%);
+      0 0 0 1px rgb(255 255 255 / 6%),
+      0 5px 14px rgb(0 0 0 / 42%),
+      0 18px 46px rgb(0 0 0 / 62%);
+    --pagesift-toolbar-shadow: 0 2px 8px rgb(0 0 0 / 28%);
   }
 }
 
