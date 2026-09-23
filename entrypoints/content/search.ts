@@ -123,6 +123,7 @@ export class PageSearch {
 
     const results: SearchResultView[] = [];
     const visibilityCache = new Map<Element, boolean>();
+    // This light-DOM walker cannot enter PageSift's Shadow Root UI.
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (candidate) =>
         isVisibleTextNode(candidate as Text, visibilityCache)
@@ -215,6 +216,11 @@ export class PageSearch {
     this.clearHighlights();
   }
 
+  restoreHighlights(activeId?: string): void {
+    this.renderAllHighlights();
+    if (activeId) this.select(activeId, { scroll: false });
+  }
+
   private renderAllHighlights(): void {
     const registry = getHighlightRegistry();
     registry?.delete(ALL_HIGHLIGHTS_NAME);
@@ -244,12 +250,12 @@ export function installPageHighlightStyles(): () => void {
   style.dataset.pagesiftHighlight = 'true';
   style.textContent = `
     ::highlight(${ALL_HIGHLIGHTS_NAME}) {
-      background-color: #fff0a6;
+      background-color: #ffff05;
       color: inherit;
     }
 
     ::highlight(${ACTIVE_HIGHLIGHT_NAME}) {
-      background-color: #ffd24a;
+      background-color: #ff9632;
       color: #171717;
       text-decoration: underline;
       text-decoration-color: #9a6700;

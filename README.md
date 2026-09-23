@@ -2,6 +2,8 @@
 
 PageSift is a Chrome extension that replaces the ordinary find-in-page interaction with a compact list of every match and its surrounding context.
 
+The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadcn components. The page-search panel is mounted in a Shadow DOM so its styles remain isolated from the websites it runs on.
+
 ## MVP behavior
 
 - Press `Command+F` on macOS or `Ctrl+F` on Windows/Linux.
@@ -48,6 +50,16 @@ Useful checks:
 pnpm compile
 pnpm build
 ```
+
+### UI components
+
+Shadcn components are added as source code under `components/ui`. Add only the component needed for the current feature:
+
+```bash
+pnpm dlx shadcn@latest add <component>
+```
+
+The configuration is stored in `components.json`, and shared theme tokens live in `assets/tailwind.css`. Content UI styles must continue to be imported by the Shadow DOM entrypoint with WXT's `cssInjectionMode: 'ui'`; do not inject the Tailwind stylesheet into the host document.
 
 ## MVP support
 

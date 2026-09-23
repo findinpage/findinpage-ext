@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { App, type PageSiftHandle } from './App';
-import './style.css';
+import '@/assets/tailwind.css';
 
 type MountedUi = {
   root: Root;
