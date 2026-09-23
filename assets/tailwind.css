@@ -112,31 +112,29 @@
   pointer-events: none !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  :host {
-    color-scheme: dark;
-    --background: hsl(0 0% 7.04%);
-    --foreground: hsl(0 0% 92%);
-    --card: hsl(0 0% 9.8%);
-    --card-foreground: hsl(0 0% 98%);
-    --primary: hsl(0 0% 98%);
-    --primary-foreground: hsl(0 0% 9%);
-    --secondary: hsl(0 0% 12.9%);
-    --secondary-foreground: hsl(0 0% 92%);
-    --muted: hsl(0 0% 12.9%);
-    --muted-foreground: hsl(0 0% 70% / 80%);
-    --accent: hsl(0 0% 40.9% / 30%);
-    --accent-foreground: hsl(0 0% 90%);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: hsl(0 0% 40% / 20%);
-    --input: hsl(0 0% 40.9% / 30%);
-    --ring: hsl(0 0% 54.9%);
-    --pagesift-floating-shadow:
-      0 0 0 1px rgb(255 255 255 / 6%),
-      0 5px 14px rgb(0 0 0 / 42%),
-      0 18px 46px rgb(0 0 0 / 62%);
-    --pagesift-toolbar-shadow: 0 2px 8px rgb(0 0 0 / 28%);
-  }
+:host([data-pagesift-color-scheme="dark"]) {
+  color-scheme: dark;
+  --background: hsl(0 0% 7.04%);
+  --foreground: hsl(0 0% 92%);
+  --card: hsl(0 0% 9.8%);
+  --card-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 98%);
+  --primary-foreground: hsl(0 0% 9%);
+  --secondary: hsl(0 0% 12.9%);
+  --secondary-foreground: hsl(0 0% 92%);
+  --muted: hsl(0 0% 12.9%);
+  --muted-foreground: hsl(0 0% 70% / 80%);
+  --accent: hsl(0 0% 40.9% / 30%);
+  --accent-foreground: hsl(0 0% 90%);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: hsl(0 0% 40% / 20%);
+  --input: hsl(0 0% 40.9% / 30%);
+  --ring: hsl(0 0% 54.9%);
+  --pagesift-floating-shadow:
+    0 0 0 1px rgb(255 255 255 / 6%),
+    0 5px 14px rgb(0 0 0 / 42%),
+    0 18px 46px rgb(0 0 0 / 62%);
+  --pagesift-toolbar-shadow: 0 2px 8px rgb(0 0 0 / 28%);
 }
 
 @layer base {

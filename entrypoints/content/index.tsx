@@ -18,7 +18,41 @@ export default defineContentScript({
 
   async main(ctx) {
     let appHandle: PageSiftHandle | undefined;
+    let shadowHostElement: HTMLElement | undefined;
     let openWhenReady = false;
+    const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const resolveColorScheme = (): 'light' | 'dark' => {
+      const root = document.documentElement;
+      const declaredScheme = root.style.colorScheme;
+
+      if (
+        declaredScheme === 'dark' ||
+        root.classList.contains('dark') ||
+        root.dataset.theme === 'dark'
+      ) {
+        return 'dark';
+      }
+      if (
+        declaredScheme === 'light' ||
+        root.classList.contains('light') ||
+        root.dataset.theme === 'light'
+      ) {
+        return 'light';
+      }
+      return systemColorScheme.matches ? 'dark' : 'light';
+    };
+
+    const syncColorScheme = () => {
+      shadowHostElement?.setAttribute('data-pagesift-color-scheme', resolveColorScheme());
+    };
+
+    const themeObserver = new MutationObserver(syncColorScheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-theme'],
+    });
+    systemColorScheme.addEventListener('change', syncColorScheme);
 
     const onFindShortcut = (event: KeyboardEvent) => {
       const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
@@ -60,6 +94,8 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       window.removeEventListener('keydown', onFindShortcut, { capture: true });
       browser.runtime.onMessage.removeListener(onMessage);
+      themeObserver.disconnect();
+      systemColorScheme.removeEventListener('change', syncColorScheme);
     });
 
     const ui = await createShadowRootUi<MountedUi>(ctx, {
@@ -68,6 +104,8 @@ export default defineContentScript({
       zIndex: 2_147_483_647,
       isolateEvents: true,
       onMount(container, _shadow, shadowHost) {
+        shadowHostElement = shadowHost;
+        syncColorScheme();
         shadowHost.style.margin = '0';
         shadowHost.style.padding = '0';
         shadowHost.style.border = '0';
@@ -103,6 +141,7 @@ export default defineContentScript({
       onRemove(mounted) {
         appHandle?.destroy();
         appHandle = undefined;
+        shadowHostElement = undefined;
         mounted?.root.unmount();
       },
     });
