@@ -301,12 +301,12 @@ export function installPageHighlightStyles(): () => void {
   style.textContent = `
     ::highlight(${ALL_HIGHLIGHTS_NAME}) {
       background-color: #ffff05;
-      color: inherit;
+      color: #000000;
     }
 
     ::highlight(${ACTIVE_HIGHLIGHT_NAME}) {
       background-color: #ff9632;
-      color: #171717;
+      color: #000000;
       text-decoration: underline;
       text-decoration-color: #9a6700;
       text-decoration-thickness: 2px;

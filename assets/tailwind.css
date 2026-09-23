@@ -54,7 +54,7 @@
   --ring: #1a73e8;
   --match: #ffff05;
   --match-active: #ff9632;
-  --match-foreground: #171717;
+  --match-foreground: #000000;
   --match-decoration: #9a6700;
   /* Keep extension geometry independent from the host document's root font size. */
   --radius: 9px;
