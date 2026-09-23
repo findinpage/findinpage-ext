@@ -40,6 +40,16 @@ export interface SearchResultView {
 interface MatchLocation {
   range: Range;
   scrollTarget: Element;
+  signature: string;
+  sourceText: string;
+}
+
+interface SelectionAnchor {
+  startContainer: Node;
+  startOffset: number;
+  scrollTarget: Element;
+  signature: string;
+  sourceText: string;
 }
 
 export interface SearchResponse {
@@ -59,6 +69,10 @@ function getHighlightRegistry(): HighlightRegistry | undefined {
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function createResultSignature(view: Pick<SearchResultView, 'before' | 'match' | 'after'>): string {
+  return `${view.before}\u0000${view.match}\u0000${view.after}`;
 }
 
 function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): boolean {
@@ -157,7 +171,12 @@ export class PageSearch {
 
         if (scrollTarget) {
           const view = createExcerpt(textNode, offset, normalizedQuery.length);
-          this.locations.set(id, { range, scrollTarget });
+          this.locations.set(id, {
+            range,
+            scrollTarget,
+            signature: createResultSignature(view),
+            sourceText,
+          });
           results.push({
             id,
             ...view,
@@ -178,6 +197,37 @@ export class PageSearch {
     };
     this.renderAllHighlights();
     return response;
+  }
+
+  captureSelection(id: string): SelectionAnchor | undefined {
+    const location = this.locations.get(id);
+    if (!location) return undefined;
+
+    return {
+      startContainer: location.range.startContainer,
+      startOffset: location.range.startOffset,
+      scrollTarget: location.scrollTarget,
+      signature: location.signature,
+      sourceText: location.sourceText,
+    };
+  }
+
+  resolveSelection(anchor: SelectionAnchor): string | undefined {
+    const entries = [...this.locations.entries()];
+    const exactMatch = entries.find(([, location]) =>
+      location.range.startContainer === anchor.startContainer &&
+      location.range.startOffset === anchor.startOffset &&
+      location.sourceText === anchor.sourceText
+    );
+    if (exactMatch) return exactMatch[0];
+
+    const sameTarget = entries.find(([, location]) =>
+      location.scrollTarget === anchor.scrollTarget &&
+      location.signature === anchor.signature
+    );
+    if (sameTarget) return sameTarget[0];
+
+    return entries.find(([, location]) => location.signature === anchor.signature)?.[0];
   }
 
   select(id: string, options: { scroll?: boolean } = {}): boolean {

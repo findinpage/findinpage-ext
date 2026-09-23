@@ -92,7 +92,10 @@ export function App({ onReady }: AppProps) {
 
   const runSearch = useCallback(
     (preservePosition: boolean) => {
-      const previousIndex = results.findIndex((result) => result.id === activeId);
+      const selectionAnchor =
+        preservePosition && activeId
+          ? searchRef.current.captureSelection(activeId)
+          : undefined;
       if (preservePosition) {
         pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
       }
@@ -102,15 +105,19 @@ export function App({ onReady }: AppProps) {
       setResults(response.results);
       setTruncated(response.truncated);
 
-      const nextIndex = preservePosition && previousIndex >= 0 ? previousIndex : 0;
-      const nextResult = response.results[Math.min(nextIndex, response.results.length - 1)];
+      const resolvedId = selectionAnchor
+        ? searchRef.current.resolveSelection(selectionAnchor)
+        : undefined;
+      const nextResult = preservePosition
+        ? response.results.find((result) => result.id === resolvedId)
+        : response.results[0];
       setActiveId(
         nextResult && searchRef.current.select(nextResult.id, { scroll: false })
           ? nextResult.id
           : undefined,
       );
     },
-    [activeId, query, results],
+    [activeId, query],
   );
 
   useEffect(() => {
