@@ -10,7 +10,7 @@ import {
   type SearchResultView,
 } from './search';
 
-export interface PageSiftHandle {
+export interface FindInPageHandle {
   openAndFocus(): void;
   toggle(): void;
   close(): void;
@@ -20,7 +20,7 @@ export interface PageSiftHandle {
 }
 
 interface AppProps {
-  onReady(handle: PageSiftHandle): void;
+  onReady(handle: FindInPageHandle): void;
 }
 
 export function App({ onReady }: AppProps) {
@@ -75,7 +75,7 @@ export function App({ onReady }: AppProps) {
       focusInput();
     };
 
-    const handle: PageSiftHandle = {
+    const handle: FindInPageHandle = {
       openAndFocus: open,
       toggle() {
         if (isOpenRef.current) close();
@@ -229,11 +229,11 @@ export function App({ onReady }: AppProps) {
 
   return (
     <section
-      className="pagesift-panel"
-      aria-label="PageSift page search"
+      className="findinpage-panel"
+      aria-label="Find in Page page search"
       onKeyDown={handlePanelKeyDown}
     >
-      <div className="pagesift-toolbar">
+      <div className="findinpage-toolbar">
         <Input
           ref={inputRef}
           type="search"
@@ -247,13 +247,13 @@ export function App({ onReady }: AppProps) {
         />
         {results.length > 0 && (
           <span
-            className="pagesift-counter"
+            className="findinpage-counter"
             aria-live="polite"
           >
             {currentResult}/{totalResults}
           </span>
         )}
-        <span className="pagesift-divider" aria-hidden="true" />
+        <span className="findinpage-divider" aria-hidden="true" />
         <Button
           variant="ghost"
           size="panelIcon"
@@ -281,7 +281,7 @@ export function App({ onReady }: AppProps) {
           size="panelIcon"
           type="button"
           onClick={close}
-          aria-label="Close PageSift"
+          aria-label="Close Find in Page"
           title="Close"
         >
           <X data-icon="inline-start" aria-hidden="true" />
@@ -290,24 +290,24 @@ export function App({ onReady }: AppProps) {
 
       <div
         ref={resultsRef}
-        className="pagesift-results"
+        className="findinpage-results"
         role="list"
         aria-label="Search results"
       >
         {!hasQuery && (
-          <div className="pagesift-empty">
-            <div className="pagesift-empty-icon" aria-hidden="true">
+          <div className="findinpage-empty">
+            <div className="findinpage-empty-icon" aria-hidden="true">
               <Search />
             </div>
-            <p className="pagesift-empty-copy">
+            <p className="findinpage-empty-copy">
               Matches will appear here with their surrounding context.
             </p>
           </div>
         )}
 
         {hasQuery && results.length === 0 && (
-          <div className="pagesift-empty pagesift-empty--compact">
-            <p className="pagesift-empty-copy">No matches on this page.</p>
+          <div className="findinpage-empty findinpage-empty--compact">
+            <p className="findinpage-empty-copy">No matches on this page.</p>
           </div>
         )}
 
@@ -322,15 +322,15 @@ export function App({ onReady }: AppProps) {
             aria-current={activeId === result.id ? 'true' : undefined}
             onClick={() => selectResult(result)}
           >
-            <span className="pagesift-index">
+            <span className="findinpage-index">
               {result.order}
             </span>
-            <span className="pagesift-result-copy">
+            <span className="findinpage-result-copy">
               {result.before}
               <mark
                 className={cn(
-                  'pagesift-match',
-                  activeId === result.id && 'pagesift-match--active',
+                  'findinpage-match',
+                  activeId === result.id && 'findinpage-match--active',
                 )}
               >
                 {result.match}

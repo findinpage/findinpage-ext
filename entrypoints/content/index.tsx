@@ -1,14 +1,14 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { App, type PageSiftHandle } from './App';
+import { App, type FindInPageHandle } from './App';
 import '@/assets/tailwind.css';
 
 type MountedUi = {
   root: Root;
 };
 
-type PageSiftMessage = {
-  type: 'TOGGLE_PAGESIFT';
+type FindInPageMessage = {
+  type: 'TOGGLE_FIND_IN_PAGE';
 };
 
 export default defineContentScript({
@@ -17,7 +17,7 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
 
   async main(ctx) {
-    let appHandle: PageSiftHandle | undefined;
+    let appHandle: FindInPageHandle | undefined;
     let shadowHostElement: HTMLElement | undefined;
     let openWhenReady = false;
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
@@ -44,7 +44,7 @@ export default defineContentScript({
     };
 
     const syncColorScheme = () => {
-      shadowHostElement?.setAttribute('data-pagesift-color-scheme', resolveColorScheme());
+      shadowHostElement?.setAttribute('data-findinpage-color-scheme', resolveColorScheme());
     };
 
     const themeObserver = new MutationObserver(syncColorScheme);
@@ -86,7 +86,7 @@ export default defineContentScript({
       appHandle.close();
     };
 
-    const keepPageSiftFocused = (event: FocusEvent) => {
+    const keepFindInPageFocused = (event: FocusEvent) => {
       if (!appHandle?.isOpen() || !shadowHostElement) return;
       const target = event.target;
       if (
@@ -96,7 +96,7 @@ export default defineContentScript({
         return;
       }
 
-      // Page dialogs often install focus traps. While PageSift is open, keep its
+      // Page dialogs often install focus traps. While Find in Page is open, keep its
       // search input as the active focus boundary and hide the escaped event.
       event.stopImmediatePropagation();
       appHandle.focus();
@@ -104,11 +104,11 @@ export default defineContentScript({
 
     window.addEventListener('keydown', onFindShortcut, { capture: true });
     window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
-    window.addEventListener('focus', keepPageSiftFocused, { capture: true });
-    window.addEventListener('focusin', keepPageSiftFocused, { capture: true });
+    window.addEventListener('focus', keepFindInPageFocused, { capture: true });
+    window.addEventListener('focusin', keepFindInPageFocused, { capture: true });
 
-    const onMessage = (message: PageSiftMessage) => {
-      if (message.type !== 'TOGGLE_PAGESIFT') return;
+    const onMessage = (message: FindInPageMessage) => {
+      if (message.type !== 'TOGGLE_FIND_IN_PAGE') return;
 
       if (appHandle) {
         appHandle.toggle();
@@ -121,15 +121,15 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       window.removeEventListener('keydown', onFindShortcut, { capture: true });
       window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
-      window.removeEventListener('focus', keepPageSiftFocused, { capture: true });
-      window.removeEventListener('focusin', keepPageSiftFocused, { capture: true });
+      window.removeEventListener('focus', keepFindInPageFocused, { capture: true });
+      window.removeEventListener('focusin', keepFindInPageFocused, { capture: true });
       browser.runtime.onMessage.removeListener(onMessage);
       themeObserver.disconnect();
       systemColorScheme.removeEventListener('change', syncColorScheme);
     });
 
     const ui = await createShadowRootUi<MountedUi>(ctx, {
-      name: 'pagesift-search',
+      name: 'findinpage-search',
       position: 'modal',
       zIndex: 2_147_483_647,
       isolateEvents: true,

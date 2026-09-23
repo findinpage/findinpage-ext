@@ -1,6 +1,6 @@
 export const MAX_RESULTS = 500;
-export const ACTIVE_HIGHLIGHT_NAME = 'pagesift-active-match';
-export const ALL_HIGHLIGHTS_NAME = 'pagesift-all-matches';
+export const ACTIVE_HIGHLIGHT_NAME = 'findinpage-active-match';
+export const ALL_HIGHLIGHTS_NAME = 'findinpage-all-matches';
 
 const EXCLUDED_SELECTOR = [
   'script',
@@ -137,7 +137,7 @@ export class PageSearch {
 
     const results: SearchResultView[] = [];
     const visibilityCache = new Map<Element, boolean>();
-    // This light-DOM walker cannot enter PageSift's Shadow Root UI.
+    // This light-DOM walker cannot enter Find in Page's Shadow Root UI.
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (candidate) =>
         isVisibleTextNode(candidate as Text, visibilityCache)
@@ -297,7 +297,7 @@ export class PageSearch {
 
 export function installPageHighlightStyles(): () => void {
   const style = document.createElement('style');
-  style.dataset.pagesiftHighlight = 'true';
+  style.dataset.findinpageHighlight = 'true';
   style.textContent = `
     ::highlight(${ALL_HIGHLIGHTS_NAME}) {
       background-color: #ffff05;

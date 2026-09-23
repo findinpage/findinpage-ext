@@ -8,11 +8,11 @@ export default defineConfig({
     plugins: [tailwindcss()],
   }),
   manifest: {
-    name: 'PageSift',
+    name: 'Find in Page',
     description: 'See every find-in-page match with its surrounding context.',
     minimum_chrome_version: '105',
     action: {
-      default_title: 'Toggle PageSift',
+      default_title: 'Toggle Find in Page',
       default_icon: {
         16: 'icon/16.png',
         32: 'icon/32.png',

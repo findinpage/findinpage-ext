@@ -3,7 +3,7 @@ export default defineBackground(() => {
     if (!tab.id) return;
 
     try {
-      await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_PAGESIFT' });
+      await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_FIND_IN_PAGE' });
     } catch {
       // Protected browser pages do not allow content-script messaging.
     }
