@@ -13,6 +13,9 @@ import {
 export interface PageSiftHandle {
   openAndFocus(): void;
   toggle(): void;
+  close(): void;
+  focus(): void;
+  isOpen(): boolean;
   destroy(): void;
 }
 
@@ -27,6 +30,7 @@ export function App({ onReady }: AppProps) {
   const [truncated, setTruncated] = useState(false);
   const [activeId, setActiveId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
+  const isOpenRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef(new PageSearch());
   const restoreFocusRef = useRef<HTMLElement | null>(null);
@@ -39,6 +43,8 @@ export function App({ onReady }: AppProps) {
   useEffect(() => installPageHighlightStyles(), []);
 
   const focusInput = useCallback(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
     requestAnimationFrame(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -46,6 +52,8 @@ export function App({ onReady }: AppProps) {
   }, []);
 
   const close = useCallback(() => {
+    if (!isOpenRef.current) return;
+    isOpenRef.current = false;
     resultsScrollTopRef.current = resultsRef.current?.scrollTop ?? resultsScrollTopRef.current;
     searchRef.current.hideHighlights();
     setIsOpen(false);
@@ -55,7 +63,8 @@ export function App({ onReady }: AppProps) {
 
   useEffect(() => {
     const open = () => {
-      if (!isOpen) {
+      if (!isOpenRef.current) {
+        isOpenRef.current = true;
         restoreFocusRef.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
         restoreScrollRef.current = hasOpenedRef.current;
@@ -69,15 +78,18 @@ export function App({ onReady }: AppProps) {
     const handle: PageSiftHandle = {
       openAndFocus: open,
       toggle() {
-        if (isOpen) close();
+        if (isOpenRef.current) close();
         else open();
       },
+      close,
+      focus: focusInput,
+      isOpen: () => isOpenRef.current,
       destroy() {
         searchRef.current.clear();
       },
     };
     onReady(handle);
-  }, [activeId, close, focusInput, isOpen, onReady]);
+  }, [activeId, close, focusInput, onReady]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -154,17 +166,6 @@ export function App({ onReady }: AppProps) {
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
     };
   }, [isOpen, query, runSearch]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isOpen) {
-        event.preventDefault();
-        close();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [close, isOpen]);
 
   const selectResult = (result: SearchResultView, scroll = true) => {
     if (searchRef.current.select(result.id, { scroll })) {

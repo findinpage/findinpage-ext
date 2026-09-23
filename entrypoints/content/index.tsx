@@ -78,7 +78,34 @@ export default defineContentScript({
       }
     };
 
+    const onGlobalKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !appHandle?.isOpen()) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      appHandle.close();
+    };
+
+    const keepPageSiftFocused = (event: FocusEvent) => {
+      if (!appHandle?.isOpen() || !shadowHostElement) return;
+      const target = event.target;
+      if (
+        target === shadowHostElement ||
+        (target instanceof Node && shadowHostElement.contains(target))
+      ) {
+        return;
+      }
+
+      // Page dialogs often install focus traps. While PageSift is open, keep its
+      // search input as the active focus boundary and hide the escaped event.
+      event.stopImmediatePropagation();
+      appHandle.focus();
+    };
+
     window.addEventListener('keydown', onFindShortcut, { capture: true });
+    window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
+    window.addEventListener('focus', keepPageSiftFocused, { capture: true });
+    window.addEventListener('focusin', keepPageSiftFocused, { capture: true });
 
     const onMessage = (message: PageSiftMessage) => {
       if (message.type !== 'TOGGLE_PAGESIFT') return;
@@ -93,6 +120,9 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       window.removeEventListener('keydown', onFindShortcut, { capture: true });
+      window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
+      window.removeEventListener('focus', keepPageSiftFocused, { capture: true });
+      window.removeEventListener('focusin', keepPageSiftFocused, { capture: true });
       browser.runtime.onMessage.removeListener(onMessage);
       themeObserver.disconnect();
       systemColorScheme.removeEventListener('change', syncColorScheme);
