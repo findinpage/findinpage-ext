@@ -245,12 +245,14 @@ export function App({ onReady }: AppProps) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <span
-          className="pagesift-counter"
-          aria-live="polite"
-        >
-          {currentResult}/{totalResults}
-        </span>
+        {results.length > 0 && (
+          <span
+            className="pagesift-counter"
+            aria-live="polite"
+          >
+            {currentResult}/{totalResults}
+          </span>
+        )}
         <span className="pagesift-divider" aria-hidden="true" />
         <Button
           variant="ghost"
