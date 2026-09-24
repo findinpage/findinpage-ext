@@ -191,12 +191,12 @@
   pointer-events: none;
 }
 
-.findinpage-toolbar:focus-within {
+.findinpage-toolbar:has(.findinpage-input:focus) {
   background: var(--findinpage-focus-background);
   box-shadow: none;
 }
 
-.findinpage-toolbar:focus-within::after {
+.findinpage-toolbar:has(.findinpage-input:focus)::after {
   border-color: var(--ring);
 }
 
