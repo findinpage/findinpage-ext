@@ -9,7 +9,8 @@ export default defineConfig({
   }),
   manifest: {
     name: 'Find in Page',
-    description: 'See every find-in-page match with its surrounding context.',
+    description:
+      'A free, open-source browser extension that improves Cmd/Ctrl + F with a contextual list of every match.',
     minimum_chrome_version: '105',
     action: {
       default_title: 'Toggle Find in Page',
