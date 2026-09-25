@@ -22,15 +22,16 @@ export interface FindInPageHandle {
 
 interface AppProps {
   onReady(handle: FindInPageHandle): void;
+  initialQuery?: string;
   installAction?: {
     label: string;
     onClick(): void;
   };
 }
 
-export function App({ onReady, installAction }: AppProps) {
+export function App({ onReady, initialQuery = '', installAction }: AppProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchResultView[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const panelRef = useRef<HTMLElement>(null);

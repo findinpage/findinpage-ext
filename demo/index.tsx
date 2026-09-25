@@ -6,6 +6,7 @@ import panelStyles from '@/assets/tailwind.css?inline';
 export interface FindInPageDemoOptions {
   installUrl: string;
   installLabel?: string;
+  initialQuery?: string;
 }
 
 export interface FindInPageDemoHandle {
@@ -89,6 +90,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
   root.render(
     <React.StrictMode>
       <App
+        initialQuery={options.initialQuery}
         installAction={{
           label: options.installLabel ?? 'Add to browser',
           onClick() {
