@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   installPageHighlightStyles,
+  getAccessibleDocuments,
   getOpenShadowRoots,
   PageSearch,
   type SearchResultView,
@@ -184,20 +185,49 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
 
     let refreshTimeout: number | undefined;
     const observedRoots = new Set<Node>();
+    const observedDocuments = new Set<Document>();
+    const observers = new Map<Document, MutationObserver>();
     const observeRoot = (root: Node) => {
       if (observedRoots.has(root)) return;
       observedRoots.add(root);
-      observer.observe(root, {
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
+      const ownerDocument = root.ownerDocument ?? document;
+      const NodeForDocument = ownerDocument.defaultView?.Node;
+      if (!NodeForDocument || !(root instanceof NodeForDocument)) return;
+      let observer = observers.get(ownerDocument);
+      if (!observer) {
+        const MutationObserverForDocument = ownerDocument.defaultView?.MutationObserver;
+        if (!MutationObserverForDocument) return;
+        observer = new MutationObserverForDocument(scheduleRefresh);
+        observers.set(ownerDocument, observer);
+      }
+      try {
+        observer.observe(root, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+      } catch {
+        // Some browsers reject observing a same-origin node from another realm.
+      }
     };
-    const observeOpenShadowRoots = () => {
-      for (const shadowRoot of getOpenShadowRoots()) observeRoot(shadowRoot);
+    const observeAccessibleDocuments = () => {
+      for (const ownerDocument of getAccessibleDocuments()) {
+        if (!observedDocuments.has(ownerDocument)) {
+          observedDocuments.add(ownerDocument);
+          ownerDocument.addEventListener('load', scheduleRefresh, true);
+          ownerDocument.defaultView?.addEventListener('scroll', handlePageScroll, {
+            capture: true,
+            passive: true,
+          });
+        }
+        if (ownerDocument.body) observeRoot(ownerDocument.body);
+        for (const shadowRoot of getOpenShadowRoots(ownerDocument.body)) {
+          observeRoot(shadowRoot);
+        }
+      }
     };
     const scheduleRefresh = () => {
-      observeOpenShadowRoots();
+      observeAccessibleDocuments();
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
       refreshTimeout = window.setTimeout(() => runSearch(true), 250);
     };
@@ -207,14 +237,16 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
       scheduleRefresh();
     };
 
-    const observer = new MutationObserver(scheduleRefresh);
-    observeRoot(document.body);
-    observeOpenShadowRoots();
-    window.addEventListener('scroll', handlePageScroll, { capture: true, passive: true });
+    observeAccessibleDocuments();
 
     return () => {
-      observer.disconnect();
-      window.removeEventListener('scroll', handlePageScroll, { capture: true });
+      for (const observer of observers.values()) observer.disconnect();
+      for (const ownerDocument of observedDocuments) {
+        ownerDocument.removeEventListener('load', scheduleRefresh, true);
+        ownerDocument.defaultView?.removeEventListener('scroll', handlePageScroll, {
+          capture: true,
+        });
+      }
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
     };
   }, [isOpen, query, runSearch]);

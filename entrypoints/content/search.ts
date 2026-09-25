@@ -37,8 +37,12 @@ export interface SearchResultView {
 }
 
 interface MatchLocation {
-  range: Range;
+  range?: Range;
+  control?: HTMLTextAreaElement;
+  matchStart: number;
+  matchEnd: number;
   scrollTarget: Element;
+  document: Document;
   signature: string;
   sourceText: string;
 }
@@ -62,8 +66,15 @@ type HighlightRegistry = {
   set(name: string, highlight: Highlight): void;
 };
 
-function getHighlightRegistry(): HighlightRegistry | undefined {
-  return (CSS as typeof CSS & { highlights?: HighlightRegistry }).highlights;
+function getHighlightRegistry(document: Document): HighlightRegistry | undefined {
+  return (document.defaultView?.CSS as typeof CSS & { highlights?: HighlightRegistry } | undefined)
+    ?.highlights;
+}
+
+type HighlightConstructor = new (...ranges: Range[]) => Highlight;
+
+function getHighlightConstructor(document: Document): HighlightConstructor | undefined {
+  return (document.defaultView as (Window & { Highlight?: HighlightConstructor }) | null)?.Highlight;
 }
 
 function normalizeWhitespace(value: string): string {
@@ -76,11 +87,13 @@ function createResultSignature(view: Pick<SearchResultView, 'before' | 'match' |
 
 function isRangeInViewport(range: Range): boolean {
   const rect = range.getBoundingClientRect();
-  const viewport = window.visualViewport;
+  const ownerWindow = range.startContainer.ownerDocument?.defaultView;
+  if (!ownerWindow) return false;
+  const viewport = ownerWindow.visualViewport;
   const viewportLeft = viewport?.offsetLeft ?? 0;
   const viewportTop = viewport?.offsetTop ?? 0;
-  const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
-  const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+  const viewportRight = viewportLeft + (viewport?.width ?? ownerWindow.innerWidth);
+  const viewportBottom = viewportTop + (viewport?.height ?? ownerWindow.innerHeight);
 
   return (
     rect.width > 0 &&
@@ -101,7 +114,8 @@ function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): 
   const cached = visibilityCache.get(parent);
   if (cached === false) return false;
   if (cached === undefined) {
-    const style = getComputedStyle(parent);
+    const style = parent.ownerDocument.defaultView?.getComputedStyle(parent);
+    if (!style) return false;
     const visible =
       style.display !== 'none' &&
       style.visibility !== 'hidden' &&
@@ -111,43 +125,140 @@ function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): 
     if (!visible) return false;
   }
 
-  const range = document.createRange();
+  const range = node.ownerDocument.createRange();
   range.selectNodeContents(node);
-  return [...range.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
+  return (
+    isDocumentFrameVisible(node.ownerDocument, visibilityCache) &&
+    [...range.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0)
+  );
 }
 
-function* walkComposedTextNodes(
+function isVisibleTextArea(
+  control: HTMLTextAreaElement,
+  visibilityCache: Map<Element, boolean>,
+): boolean {
+  const cached = visibilityCache.get(control);
+  if (cached === false) return false;
+  if (cached === undefined) {
+    const style = control.ownerDocument.defaultView?.getComputedStyle(control);
+    const visible = Boolean(
+      style &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.visibility !== 'collapse' &&
+      control.getClientRects().length > 0
+    );
+    visibilityCache.set(control, visible);
+    if (!visible) return false;
+  }
+  return isDocumentFrameVisible(control.ownerDocument, visibilityCache);
+}
+
+function isDocumentFrameVisible(
+  ownerDocument: Document,
+  visibilityCache: Map<Element, boolean>,
+): boolean {
+  let currentDocument: Document | null = ownerDocument;
+  while (currentDocument && currentDocument !== document) {
+    const frame: Element | null = currentDocument.defaultView?.frameElement ?? null;
+    if (!frame) return false;
+    const cached = visibilityCache.get(frame);
+    if (cached === false) return false;
+    if (cached === undefined) {
+      const style = frame.ownerDocument.defaultView?.getComputedStyle(frame);
+      const visible = Boolean(
+        style &&
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.visibility !== 'collapse' &&
+        frame.getClientRects().length > 0
+      );
+      visibilityCache.set(frame, visible);
+      if (!visible) return false;
+    }
+    currentDocument = frame.ownerDocument;
+  }
+  return true;
+}
+
+type SearchSource = Text | HTMLTextAreaElement;
+
+function* walkComposedSearchSources(
   node: Node,
   visited = new Set<Node>(),
-): Generator<Text> {
+): Generator<SearchSource> {
   if (visited.has(node)) return;
   visited.add(node);
 
-  if (node instanceof Text) {
-    yield node;
+  if (node.nodeType === Node.TEXT_NODE) {
+    yield node as Text;
     return;
   }
 
-  if (node instanceof HTMLSlotElement) {
-    const assignedNodes = node.assignedNodes({ flatten: true });
+  if (node.nodeType === Node.ELEMENT_NODE && (node as Element).localName === 'slot') {
+    const assignedNodes = (node as HTMLSlotElement).assignedNodes({ flatten: true });
     if (assignedNodes.length > 0) {
       for (const assignedNode of assignedNodes) {
-        yield* walkComposedTextNodes(assignedNode, visited);
+        yield* walkComposedSearchSources(assignedNode, visited);
       }
       return;
     }
   }
 
-  if (node instanceof Element && node.hasAttribute('data-findinpage-host')) return;
+  const element = node.nodeType === Node.ELEMENT_NODE ? node as Element : undefined;
+  if (element?.hasAttribute('data-findinpage-host')) return;
 
-  if (node instanceof Element && node.shadowRoot) {
-    yield* walkComposedTextNodes(node.shadowRoot, visited);
+  if (element?.localName === 'textarea') {
+    yield element as HTMLTextAreaElement;
+    return;
+  }
+
+  if (node.nodeType === Node.ELEMENT_NODE && (node as Element).localName === 'iframe') {
+    const iframe = node as HTMLIFrameElement;
+    try {
+      const frameDocument = iframe.contentDocument;
+      if (frameDocument?.body) {
+        yield* walkComposedSearchSources(frameDocument.body, visited);
+      }
+    } catch {
+      // Cross-origin frame documents are intentionally unavailable to page scripts.
+    }
+    return;
+  }
+
+  if (element?.shadowRoot) {
+    yield* walkComposedSearchSources(element.shadowRoot, visited);
     return;
   }
 
   for (const child of node.childNodes) {
-    yield* walkComposedTextNodes(child, visited);
+    yield* walkComposedSearchSources(child, visited);
   }
+}
+
+export function getAccessibleDocuments(root: Document = document): Document[] {
+  const documents: Document[] = [];
+  const visited = new Set<Document>();
+  const visitParent = (parent: ParentNode) => {
+    for (const element of parent.querySelectorAll('*')) {
+      if (element.shadowRoot) visitParent(element.shadowRoot);
+      if (element.localName !== 'iframe') continue;
+      try {
+        const frameDocument = (element as HTMLIFrameElement).contentDocument;
+        if (frameDocument) visit(frameDocument);
+      } catch {
+        // Ignore cross-origin frames.
+      }
+    }
+  };
+  const visit = (current: Document) => {
+    if (visited.has(current)) return;
+    visited.add(current);
+    documents.push(current);
+    visitParent(current);
+  };
+  visit(root);
+  return documents;
 }
 
 export function getOpenShadowRoots(root: ParentNode = document.body): ShadowRoot[] {
@@ -174,7 +285,7 @@ function createExcerpt(
   const containerText = container?.textContent ?? nodeText;
   let nodePosition = 0;
   if (container) {
-    const prefixRange = document.createRange();
+    const prefixRange = node.ownerDocument.createRange();
     prefixRange.selectNodeContents(container);
     prefixRange.setEnd(node, 0);
     nodePosition = prefixRange.toString().length;
@@ -195,8 +306,25 @@ function createExcerpt(
   };
 }
 
+function createValueExcerpt(
+  value: string,
+  matchStart: number,
+  matchLength: number,
+): Pick<SearchResultView, 'before' | 'match' | 'after'> {
+  const matchEnd = matchStart + matchLength;
+  const beforeStart = Math.max(0, matchStart - 72);
+  const afterEnd = Math.min(value.length, matchEnd + 88);
+  return {
+    before: `${beforeStart > 0 ? '...' : ''}${normalizeWhitespace(value.slice(beforeStart, matchStart))}`,
+    match: value.slice(matchStart, matchEnd),
+    after: `${normalizeWhitespace(value.slice(matchEnd, afterEnd))}${afterEnd < value.length ? '...' : ''}`,
+  };
+}
+
 export class PageSearch {
   private locations = new Map<string, MatchLocation>();
+  private highlightedDocuments = new Set<Document>();
+  private frameHighlightStyles = new Map<Document, HTMLStyleElement>();
   private runId = 0;
 
   search(query: string): SearchResponse {
@@ -212,27 +340,43 @@ export class PageSearch {
 
     const results: SearchResultView[] = [];
     const visibilityCache = new Map<Element, boolean>();
-    for (const textNode of walkComposedTextNodes(document.body)) {
-      if (!isVisibleTextNode(textNode, visibilityCache)) continue;
-      const sourceText = textNode.nodeValue ?? '';
+    for (const source of walkComposedSearchSources(document.body)) {
+      const isTextArea = source.nodeType === Node.ELEMENT_NODE;
+      if (isTextArea) {
+        if (!isVisibleTextArea(source as HTMLTextAreaElement, visibilityCache)) continue;
+      } else if (!isVisibleTextNode(source as Text, visibilityCache)) {
+        continue;
+      }
+      const sourceText = isTextArea
+        ? (source as HTMLTextAreaElement).value
+        : (source as Text).nodeValue ?? '';
       const searchableText = sourceText.toLocaleLowerCase();
       let offset = 0;
 
       while ((offset = searchableText.indexOf(normalizedQuery, offset)) !== -1) {
-        const range = document.createRange();
-        range.setStart(textNode, offset);
-        range.setEnd(textNode, offset + normalizedQuery.length);
+        const ownerDocument = source.ownerDocument;
+        const range = isTextArea ? undefined : ownerDocument.createRange();
+        range?.setStart(source, offset);
+        range?.setEnd(source, offset + normalizedQuery.length);
 
         const id = `${this.runId}-${results.length}`;
         const scrollTarget =
-          textNode.parentElement?.closest(SEMANTIC_CONTAINER_SELECTOR) ??
-          textNode.parentElement;
+          isTextArea
+            ? source as HTMLTextAreaElement
+            : (source as Text).parentElement?.closest(SEMANTIC_CONTAINER_SELECTOR) ??
+              (source as Text).parentElement;
 
         if (scrollTarget) {
-          const view = createExcerpt(textNode, offset, normalizedQuery.length);
+          const view = isTextArea
+            ? createValueExcerpt(sourceText, offset, normalizedQuery.length)
+            : createExcerpt(source as Text, offset, normalizedQuery.length);
           this.locations.set(id, {
             range,
+            control: isTextArea ? source as HTMLTextAreaElement : undefined,
+            matchStart: offset,
+            matchEnd: offset + normalizedQuery.length,
             scrollTarget,
+            document: ownerDocument,
             signature: createResultSignature(view),
             sourceText,
           });
@@ -260,8 +404,8 @@ export class PageSearch {
     if (!location) return undefined;
 
     return {
-      startContainer: location.range.startContainer,
-      startOffset: location.range.startOffset,
+      startContainer: location.range?.startContainer ?? location.control!,
+      startOffset: location.range?.startOffset ?? location.matchStart,
       scrollTarget: location.scrollTarget,
       signature: location.signature,
       sourceText: location.sourceText,
@@ -271,8 +415,8 @@ export class PageSearch {
   resolveSelection(anchor: SelectionAnchor): string | undefined {
     const entries = [...this.locations.entries()];
     const exactMatch = entries.find(([, location]) =>
-      location.range.startContainer === anchor.startContainer &&
-      location.range.startOffset === anchor.startOffset &&
+      (location.range?.startContainer ?? location.control) === anchor.startContainer &&
+      (location.range?.startOffset ?? location.matchStart) === anchor.startOffset &&
       location.sourceText === anchor.sourceText
     );
     if (exactMatch) return exactMatch[0];
@@ -290,24 +434,29 @@ export class PageSearch {
     const location = this.locations.get(id);
     if (
       !location ||
-      !location.range.startContainer.isConnected ||
+      !(location.range?.startContainer ?? location.control)?.isConnected ||
       !location.scrollTarget.isConnected
     ) {
       return false;
     }
 
     this.clearActiveHighlight();
-    const registry = getHighlightRegistry();
-    if (registry && typeof Highlight !== 'undefined') {
-      registry.set(ACTIVE_HIGHLIGHT_NAME, new Highlight(location.range));
+    const registry = getHighlightRegistry(location.document);
+    const HighlightForDocument = getHighlightConstructor(location.document);
+    if (registry && HighlightForDocument && location.range) {
+      registry.set(ACTIVE_HIGHLIGHT_NAME, new HighlightForDocument(location.range));
     }
 
-    if (options.scroll !== false && !isRangeInViewport(location.range)) {
+    if (location.control) {
+      location.control.setSelectionRange(location.matchStart, location.matchEnd);
+    }
+    if (options.scroll !== false) {
       location.scrollTarget.scrollIntoView({
         behavior: 'auto',
         block: 'center',
         inline: 'nearest',
       });
+      this.scrollFrameIntoView(location.document);
     }
     return true;
   }
@@ -315,6 +464,8 @@ export class PageSearch {
   clear(): void {
     this.clearHighlights();
     this.locations.clear();
+    for (const style of this.frameHighlightStyles.values()) style.remove();
+    this.frameHighlightStyles.clear();
   }
 
   hideHighlights(): void {
@@ -327,33 +478,61 @@ export class PageSearch {
   }
 
   private renderAllHighlights(): void {
-    const registry = getHighlightRegistry();
-    registry?.delete(ALL_HIGHLIGHTS_NAME);
-    if (!registry || typeof Highlight === 'undefined') return;
+    const rangesByDocument = new Map<Document, Range[]>();
+    for (const { document, range } of this.locations.values()) {
+      if (!range?.startContainer.isConnected) continue;
+      const ranges = rangesByDocument.get(document) ?? [];
+      ranges.push(range);
+      rangesByDocument.set(document, ranges);
+    }
 
-    const ranges = [...this.locations.values()]
-      .map(({ range }) => range)
-      .filter((range) => range.startContainer.isConnected);
-    if (ranges.length > 0) {
-      registry.set(ALL_HIGHLIGHTS_NAME, new Highlight(...ranges));
+    for (const [ownerDocument, ranges] of rangesByDocument) {
+      const registry = getHighlightRegistry(ownerDocument);
+      const HighlightForDocument = getHighlightConstructor(ownerDocument);
+      if (!registry || !HighlightForDocument) continue;
+      if (ownerDocument !== document) this.ensureFrameHighlightStyles(ownerDocument);
+      registry.delete(ALL_HIGHLIGHTS_NAME);
+      registry.set(ALL_HIGHLIGHTS_NAME, new HighlightForDocument(...ranges));
+      this.highlightedDocuments.add(ownerDocument);
     }
   }
 
   private clearActiveHighlight(): void {
-    getHighlightRegistry()?.delete(ACTIVE_HIGHLIGHT_NAME);
+    for (const ownerDocument of this.highlightedDocuments) {
+      getHighlightRegistry(ownerDocument)?.delete(ACTIVE_HIGHLIGHT_NAME);
+    }
   }
 
   private clearHighlights(): void {
-    const registry = getHighlightRegistry();
-    registry?.get(ACTIVE_HIGHLIGHT_NAME)?.clear();
-    registry?.get(ALL_HIGHLIGHTS_NAME)?.clear();
-    registry?.delete(ACTIVE_HIGHLIGHT_NAME);
-    registry?.delete(ALL_HIGHLIGHTS_NAME);
+    for (const ownerDocument of this.highlightedDocuments) {
+      const registry = getHighlightRegistry(ownerDocument);
+      registry?.get(ACTIVE_HIGHLIGHT_NAME)?.clear();
+      registry?.get(ALL_HIGHLIGHTS_NAME)?.clear();
+      registry?.delete(ACTIVE_HIGHLIGHT_NAME);
+      registry?.delete(ALL_HIGHLIGHTS_NAME);
+    }
+    this.highlightedDocuments.clear();
+  }
+
+  private ensureFrameHighlightStyles(ownerDocument: Document): void {
+    if (this.frameHighlightStyles.has(ownerDocument)) return;
+    const style = createPageHighlightStyle(ownerDocument);
+    this.frameHighlightStyles.set(ownerDocument, style);
+  }
+
+  private scrollFrameIntoView(ownerDocument: Document): void {
+    let currentDocument: Document | null = ownerDocument;
+    while (currentDocument && currentDocument !== document) {
+      const frame: Element | null = currentDocument.defaultView?.frameElement ?? null;
+      if (!frame || frame.nodeType !== Node.ELEMENT_NODE) break;
+      frame.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      currentDocument = frame.ownerDocument;
+    }
   }
 }
 
-export function installPageHighlightStyles(): () => void {
-  const style = document.createElement('style');
+function createPageHighlightStyle(ownerDocument: Document): HTMLStyleElement {
+  const style = ownerDocument.createElement('style');
   style.dataset.findinpageHighlight = 'true';
   style.textContent = `
     ::highlight(${ALL_HIGHLIGHTS_NAME}) {
@@ -369,6 +548,11 @@ export function installPageHighlightStyles(): () => void {
       text-decoration-thickness: 2px;
     }
   `;
-  (document.head ?? document.documentElement).append(style);
+  (ownerDocument.head ?? ownerDocument.documentElement).append(style);
+  return style;
+}
+
+export function installPageHighlightStyles(): () => void {
+  const style = createPageHighlightStyle(document);
   return () => style.remove();
 }

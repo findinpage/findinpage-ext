@@ -37,10 +37,12 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   queries are never sent over the network.
 
 Search is case-insensitive and treats the complete query, including spaces, as
-literal text. Find in Page searches the top-level Light DOM and accessible open
-Shadow DOM, and shows every match, including context drawn from the nearest
-paragraph, list item, table cell, heading, blockquote, or preformatted block
-when available.
+literal text. Find in Page searches the top-level Light DOM, accessible open
+Shadow DOM, and same-origin iframes, and shows every match, including context
+drawn from the nearest paragraph, list item, table cell, heading, blockquote, or
+preformatted block when available.
+Visible textarea values are included and selecting one of those results scrolls
+to the control and selects the matching text.
 
 ## Development
 
@@ -84,15 +86,16 @@ The configuration is stored in `components.json`, and shared theme tokens live i
 
 ## MVP support
 
-Find in Page searches visible text nodes currently present in the top-level DOM
-and open Shadow DOM of ordinary HTTP and HTTPS pages. It supports one
-case-insensitive literal query and does not limit the number of results.
+Find in Page searches visible text nodes currently present in the top-level DOM,
+open Shadow DOM, and same-origin iframes of ordinary HTTP and HTTPS pages. It
+supports one case-insensitive literal query and does not limit the number of
+results.
 
 The MVP does not search:
 
 - Chrome internal or other protected pages
 - Chrome's native PDF viewer
-- iframes or closed Shadow DOM
+- cross-origin iframes or closed Shadow DOM
 - text rendered only in Canvas, WebGL, images, or video
 - virtualized content that has not been inserted into the DOM
 - other pages, tabs, or paginated content
