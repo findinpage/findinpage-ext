@@ -13,8 +13,10 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   shown with the surrounding text instead of stepping through matches one at a
   time.
 - **Fast navigation:** click a result, use the previous/next buttons, or press
-  the Up and Down arrow keys while the panel is focused. Choosing a result
-  centers its source text in the viewport.
+  the Up and Down arrow keys while the panel is focused. Press Enter in the
+  search field to run a pending search or move to the next result. Previous and
+  next navigation wraps at either end. Choosing a result centers its source text
+  in the viewport.
 - **Clear page highlights:** all matches are highlighted on the page, with the
   active match shown in a distinct style. Highlights disappear when the panel
   closes.
@@ -27,12 +29,16 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 - **Theme-aware isolated UI:** the panel follows the page or system light/dark
   preference and runs inside a Shadow DOM so website styles do not leak into
   it.
+- **Accessible navigation:** the search field and result list expose combobox
+  semantics, announce the match count and active result, and support complete
+  keyboard navigation without tabbing through every match.
 - **Local and private:** searches run entirely in the current tab. Page text and
   queries are never sent over the network.
 
-Search is case-insensitive and treats the query as literal text. Find in Page shows
-up to 500 matches, including context drawn from the nearest paragraph, list
-item, table cell, heading, blockquote, or preformatted block when available.
+Search is case-insensitive and treats the query as literal text. Find in Page
+searches the top-level Light DOM and accessible open Shadow DOM, and shows up to
+500 matches, including context drawn from the nearest paragraph, list item,
+table cell, heading, blockquote, or preformatted block when available.
 
 ## Development
 
@@ -76,13 +82,15 @@ The configuration is stored in `components.json`, and shared theme tokens live i
 
 ## MVP support
 
-Find in Page searches visible text nodes currently present in the top-level DOM of ordinary HTTP and HTTPS pages. It supports one case-insensitive literal query and displays up to 500 results.
+Find in Page searches visible text nodes currently present in the top-level DOM
+and open Shadow DOM of ordinary HTTP and HTTPS pages. It supports one
+case-insensitive literal query and displays up to 500 results.
 
 The MVP does not search:
 
 - Chrome internal or other protected pages
 - Chrome's native PDF viewer
-- iframes or host-page Shadow DOM
+- iframes or closed Shadow DOM
 - text rendered only in Canvas, WebGL, images, or video
 - virtualized content that has not been inserted into the DOM
 - other pages, tabs, or paginated content

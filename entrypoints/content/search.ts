@@ -75,6 +75,24 @@ function createResultSignature(view: Pick<SearchResultView, 'before' | 'match' |
   return `${view.before}\u0000${view.match}\u0000${view.after}`;
 }
 
+function isRangeInViewport(range: Range): boolean {
+  const rect = range.getBoundingClientRect();
+  const viewport = window.visualViewport;
+  const viewportLeft = viewport?.offsetLeft ?? 0;
+  const viewportTop = viewport?.offsetTop ?? 0;
+  const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth);
+  const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.left >= viewportLeft &&
+    rect.right <= viewportRight &&
+    rect.top >= viewportTop &&
+    rect.bottom <= viewportBottom
+  );
+}
+
 function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): boolean {
   const parent = node.parentElement;
   if (!parent || !node.nodeValue?.trim() || parent.closest(EXCLUDED_SELECTOR)) {
@@ -93,6 +111,54 @@ function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): 
 
   visibilityCache.set(parent, visible);
   return visible;
+}
+
+function* walkComposedTextNodes(
+  node: Node,
+  visited = new Set<Node>(),
+): Generator<Text> {
+  if (visited.has(node)) return;
+  visited.add(node);
+
+  if (node instanceof Text) {
+    yield node;
+    return;
+  }
+
+  if (node instanceof HTMLSlotElement) {
+    const assignedNodes = node.assignedNodes({ flatten: true });
+    if (assignedNodes.length > 0) {
+      for (const assignedNode of assignedNodes) {
+        yield* walkComposedTextNodes(assignedNode, visited);
+      }
+      return;
+    }
+  }
+
+  if (node instanceof Element && node.hasAttribute('data-findinpage-host')) return;
+
+  if (node instanceof Element && node.shadowRoot) {
+    yield* walkComposedTextNodes(node.shadowRoot, visited);
+    return;
+  }
+
+  for (const child of node.childNodes) {
+    yield* walkComposedTextNodes(child, visited);
+  }
+}
+
+export function getOpenShadowRoots(root: ParentNode = document.body): ShadowRoot[] {
+  const shadowRoots: ShadowRoot[] = [];
+  const visit = (parent: ParentNode) => {
+    for (const element of parent.querySelectorAll('*')) {
+      if (element.hasAttribute('data-findinpage-host')) continue;
+      if (!element.shadowRoot) continue;
+      shadowRoots.push(element.shadowRoot);
+      visit(element.shadowRoot);
+    }
+  };
+  visit(root);
+  return shadowRoots;
 }
 
 function createExcerpt(
@@ -137,19 +203,10 @@ export class PageSearch {
 
     const results: SearchResultView[] = [];
     const visibilityCache = new Map<Element, boolean>();
-    // This light-DOM walker cannot enter Find in Page's Shadow Root UI.
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode: (candidate) =>
-        isVisibleTextNode(candidate as Text, visibilityCache)
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_REJECT,
-    });
-
-    let currentNode: Node | null;
     let foundMoreThanLimit = false;
 
-    while ((currentNode = walker.nextNode())) {
-      const textNode = currentNode as Text;
+    for (const textNode of walkComposedTextNodes(document.body)) {
+      if (!isVisibleTextNode(textNode, visibilityCache)) continue;
       const sourceText = textNode.nodeValue ?? '';
       const searchableText = sourceText.toLocaleLowerCase();
       let offset = 0;
@@ -246,10 +303,9 @@ export class PageSearch {
       registry.set(ACTIVE_HIGHLIGHT_NAME, new Highlight(location.range));
     }
 
-    if (options.scroll !== false) {
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (options.scroll !== false && !isRangeInViewport(location.range)) {
       location.scrollTarget.scrollIntoView({
-        behavior: reduceMotion ? 'auto' : 'smooth',
+        behavior: 'auto',
         block: 'center',
         inline: 'nearest',
       });

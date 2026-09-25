@@ -135,6 +135,7 @@ export default defineContentScript({
       isolateEvents: true,
       onMount(container, _shadow, shadowHost) {
         shadowHostElement = shadowHost;
+        shadowHost.dataset.findinpageHost = 'true';
         syncColorScheme();
         shadowHost.style.margin = '0';
         shadowHost.style.padding = '0';

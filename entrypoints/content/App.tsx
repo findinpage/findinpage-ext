@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   installPageHighlightStyles,
+  getOpenShadowRoots,
   MAX_RESULTS,
   PageSearch,
   type SearchResultView,
@@ -124,7 +125,7 @@ export function App({ onReady }: AppProps) {
         ? response.results.find((result) => result.id === resolvedId)
         : response.results[0];
       setActiveId(
-        nextResult && searchRef.current.select(nextResult.id, { scroll: false })
+        nextResult && searchRef.current.select(nextResult.id, { scroll: !preservePosition })
           ? nextResult.id
           : undefined,
       );
@@ -147,17 +148,28 @@ export function App({ onReady }: AppProps) {
     if (!isOpen || !query.trim()) return;
 
     let refreshTimeout: number | undefined;
+    const observedRoots = new Set<Node>();
+    const observeRoot = (root: Node) => {
+      if (observedRoots.has(root)) return;
+      observedRoots.add(root);
+      observer.observe(root, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    };
+    const observeOpenShadowRoots = () => {
+      for (const shadowRoot of getOpenShadowRoots()) observeRoot(shadowRoot);
+    };
     const scheduleRefresh = () => {
+      observeOpenShadowRoots();
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
       refreshTimeout = window.setTimeout(() => runSearch(true), 250);
     };
 
     const observer = new MutationObserver(scheduleRefresh);
-    observer.observe(document.body, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
+    observeRoot(document.body);
+    observeOpenShadowRoots();
     window.addEventListener('scroll', scheduleRefresh, { capture: true, passive: true });
 
     return () => {
@@ -188,8 +200,12 @@ export function App({ onReady }: AppProps) {
     if (results.length === 0) return;
 
     const currentIndex = results.findIndex((result) => result.id === activeId);
-    const nextIndex = currentIndex === -1 ? (direction === 1 ? 0 : results.length - 1) : currentIndex + direction;
-    if (nextIndex < 0 || nextIndex >= results.length) return;
+    const nextIndex =
+      currentIndex === -1
+        ? direction === 1
+          ? 0
+          : results.length - 1
+        : (currentIndex + direction + results.length) % results.length;
     selectResult(results[nextIndex]);
   };
 
@@ -207,21 +223,33 @@ export function App({ onReady }: AppProps) {
     activeResult?.scrollIntoView({ block: 'nearest' });
   }, [activeId]);
 
-  if (!isOpen) return null;
-
   const hasQuery = query.trim().length > 0;
   const activeIndex = results.findIndex((result) => result.id === activeId);
   const currentResult = activeIndex >= 0 ? activeIndex + 1 : 0;
   const totalResults = truncated ? `${MAX_RESULTS}+` : String(results.length);
-  const previousDisabled = results.length === 0 || activeIndex <= 0;
-  const nextDisabled = results.length === 0 || activeIndex >= results.length - 1;
+  const navigationDisabled = results.length === 0;
+  const activeOptionId = activeId ? `findinpage-result-${activeId}` : undefined;
+  const searchStatus = !hasQuery
+    ? 'Enter a search term.'
+    : results.length === 0
+      ? 'No matches on this page.'
+      : truncated
+        ? `More than ${MAX_RESULTS} matches. Result ${currentResult} selected.`
+        : `${results.length} ${results.length === 1 ? 'match' : 'matches'}. Result ${currentResult} selected.`;
 
-  const handlePanelKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+  const handleSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
-    if (event.key === 'ArrowUp' && !previousDisabled) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (lastSearchedQueryRef.current !== query) {
+        runSearch(false);
+      } else if (!navigationDisabled) {
+        navigateResult(1);
+      }
+    } else if (event.key === 'ArrowUp' && !navigationDisabled) {
       event.preventDefault();
       navigateResult(-1);
-    } else if (event.key === 'ArrowDown' && !nextDisabled) {
+    } else if (event.key === 'ArrowDown' && !navigationDisabled) {
       event.preventDefault();
       navigateResult(1);
     }
@@ -230,29 +258,40 @@ export function App({ onReady }: AppProps) {
   return (
     <section
       className="findinpage-panel"
+      role="search"
       aria-label="Find in Page page search"
-      onKeyDown={handlePanelKeyDown}
+      hidden={!isOpen}
     >
       <div className="findinpage-toolbar">
         <Input
           ref={inputRef}
           type="search"
           variant="bare"
+          role="combobox"
           aria-label="Search this page"
+          aria-autocomplete="none"
+          aria-controls="findinpage-results"
+          aria-expanded={results.length > 0}
+          aria-activedescendant={activeOptionId}
+          aria-keyshortcuts="Enter ArrowUp ArrowDown"
           placeholder="Find on this page"
           autoComplete="off"
           spellCheck={false}
           value={query}
+          onKeyDown={handleSearchInputKeyDown}
           onChange={(event) => setQuery(event.target.value)}
         />
         {results.length > 0 && (
           <span
             className="findinpage-counter"
-            aria-live="polite"
+            aria-hidden="true"
           >
             {currentResult}/{totalResults}
           </span>
         )}
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {searchStatus}
+        </span>
         <span className="findinpage-divider" aria-hidden="true" />
         <Button
           variant="ghost"
@@ -260,7 +299,7 @@ export function App({ onReady }: AppProps) {
           type="button"
           aria-label="Previous result"
           title="Previous result"
-          disabled={previousDisabled}
+          disabled={navigationDisabled}
           onClick={() => navigateResult(-1)}
         >
           <ChevronUp data-icon="inline-start" aria-hidden="true" />
@@ -271,7 +310,7 @@ export function App({ onReady }: AppProps) {
           type="button"
           aria-label="Next result"
           title="Next result"
-          disabled={nextDisabled}
+          disabled={navigationDisabled}
           onClick={() => navigateResult(1)}
         >
           <ChevronDown data-icon="inline-start" aria-hidden="true" />
@@ -289,9 +328,10 @@ export function App({ onReady }: AppProps) {
       </div>
 
       <div
+        id="findinpage-results"
         ref={resultsRef}
         className="findinpage-results"
-        role="list"
+        role={results.length > 0 ? 'listbox' : undefined}
         aria-label="Search results"
       >
         {!hasQuery && (
@@ -317,9 +357,12 @@ export function App({ onReady }: AppProps) {
             type="button"
             variant="result"
             size="result"
-            role="listitem"
+            id={`findinpage-result-${result.id}`}
+            role="option"
+            tabIndex={-1}
             data-result-id={result.id}
-            aria-current={activeId === result.id ? 'true' : undefined}
+            aria-selected={activeId === result.id}
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => selectResult(result)}
           >
             <span className="findinpage-index">
@@ -340,6 +383,7 @@ export function App({ onReady }: AppProps) {
           </Button>
         ))}
       </div>
+
     </section>
   );
 }

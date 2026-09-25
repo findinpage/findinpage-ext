@@ -167,6 +167,10 @@
     color: var(--card-foreground);
 }
 
+.findinpage-panel[hidden] {
+    display: none;
+}
+
 .findinpage-toolbar {
     display: flex;
     min-height: var(--findinpage-toolbar-height);
@@ -245,7 +249,11 @@
     background: var(--card);
     box-shadow: none;
     overscroll-behavior: contain;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+}
+
+.findinpage-results::-webkit-scrollbar {
+    display: none;
 }
 
 .findinpage-result {
@@ -269,11 +277,11 @@
     white-space: normal;
 }
 
-.findinpage-result[aria-current="true"] {
+.findinpage-result[aria-selected="true"] {
     background: var(--muted);
 }
 
-.findinpage-result[aria-current="true"]::before {
+.findinpage-result[aria-selected="true"]::before {
     position: absolute;
     top: var(--findinpage-active-indicator-inset);
     bottom: var(--findinpage-active-indicator-inset);
