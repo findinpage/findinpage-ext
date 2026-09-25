@@ -29,6 +29,7 @@ export function App({ onReady }: AppProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultView[]>([]);
   const [activeId, setActiveId] = useState<string>();
+  const panelRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -38,6 +39,7 @@ export function App({ onReady }: AppProps) {
   const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
   const skipNextResultListScrollRef = useRef(false);
   const suppressPageScrollRefreshUntilRef = useRef(0);
+  const highlightFrameRef = useRef<number | undefined>(undefined);
   const resultVirtualizer = useVirtualizer({
     count: results.length,
     getScrollElement: () => resultsRef.current,
@@ -46,6 +48,26 @@ export function App({ onReady }: AppProps) {
   });
 
   useEffect(() => installPageHighlightStyles(), []);
+
+  const setPanelVisibility = useCallback((visible: boolean) => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    panel.dataset.open = String(visible);
+    panel.setAttribute('aria-hidden', String(!visible));
+    panel.inert = !visible;
+  }, []);
+
+  const deferHighlightUpdate = useCallback((update: () => void) => {
+    if (highlightFrameRef.current !== undefined) {
+      cancelAnimationFrame(highlightFrameRef.current);
+    }
+    highlightFrameRef.current = requestAnimationFrame(() => {
+      highlightFrameRef.current = requestAnimationFrame(() => {
+        highlightFrameRef.current = undefined;
+        update();
+      });
+    });
+  }, []);
 
   const focusInput = useCallback(() => {
     inputRef.current?.focus();
@@ -59,11 +81,14 @@ export function App({ onReady }: AppProps) {
   const close = useCallback(() => {
     if (!isOpenRef.current) return;
     isOpenRef.current = false;
-    searchRef.current.hideHighlights();
+    setPanelVisibility(false);
     setIsOpen(false);
     restoreFocusRef.current?.focus({ preventScroll: true });
     restoreFocusRef.current = null;
-  }, []);
+    deferHighlightUpdate(() => {
+      if (!isOpenRef.current) searchRef.current.hideHighlights();
+    });
+  }, [deferHighlightUpdate, setPanelVisibility]);
 
   useEffect(() => {
     const open = () => {
@@ -71,8 +96,11 @@ export function App({ onReady }: AppProps) {
         isOpenRef.current = true;
         restoreFocusRef.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        searchRef.current.restoreHighlights(activeId);
+        setPanelVisibility(true);
         setIsOpen(true);
+        deferHighlightUpdate(() => {
+          if (isOpenRef.current) searchRef.current.restoreHighlights(activeId);
+        });
       }
       focusInput();
     };
@@ -87,11 +115,14 @@ export function App({ onReady }: AppProps) {
       focus: focusInput,
       isOpen: () => isOpenRef.current,
       destroy() {
+        if (highlightFrameRef.current !== undefined) {
+          cancelAnimationFrame(highlightFrameRef.current);
+        }
         searchRef.current.clear();
       },
     };
     onReady(handle);
-  }, [activeId, close, focusInput, onReady]);
+  }, [activeId, close, deferHighlightUpdate, focusInput, onReady, setPanelVisibility]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -282,6 +313,7 @@ export function App({ onReady }: AppProps) {
 
   return (
     <section
+      ref={panelRef}
       className="findinpage-panel"
       role="search"
       aria-label="Find in Page page search"
@@ -401,7 +433,7 @@ export function App({ onReady }: AppProps) {
                   aria-posinset={virtualItem.index + 1}
                   aria-setsize={results.length}
                   aria-selected={activeId === result.id}
-                  style={{ transform: `translateY(${virtualItem.start}px)` }}
+                  style={{ top: `${virtualItem.start}px` }}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     if (result.id !== activeId) {

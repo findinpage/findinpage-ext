@@ -165,10 +165,12 @@
     background: var(--card);
     box-shadow: var(--findinpage-floating-shadow);
     color: var(--card-foreground);
+    opacity: 1;
+    will-change: opacity;
 }
 
 .findinpage-panel[data-open="false"] {
-    visibility: hidden;
+    opacity: 0;
     pointer-events: none;
 }
 
