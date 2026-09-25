@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,11 +34,16 @@ export function App({ onReady }: AppProps) {
   const resultsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef(new PageSearch());
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const resultsScrollTopRef = useRef(0);
   const lastSearchedQueryRef = useRef<string | undefined>(undefined);
-  const hasOpenedRef = useRef(false);
-  const restoreScrollRef = useRef(false);
   const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
+  const skipNextResultListScrollRef = useRef(false);
+  const suppressPageScrollRefreshUntilRef = useRef(0);
+  const resultVirtualizer = useVirtualizer({
+    count: results.length,
+    getScrollElement: () => resultsRef.current,
+    estimateSize: () => 60,
+    overscan: 6,
+  });
 
   useEffect(() => installPageHighlightStyles(), []);
 
@@ -53,7 +59,6 @@ export function App({ onReady }: AppProps) {
   const close = useCallback(() => {
     if (!isOpenRef.current) return;
     isOpenRef.current = false;
-    resultsScrollTopRef.current = resultsRef.current?.scrollTop ?? resultsScrollTopRef.current;
     searchRef.current.hideHighlights();
     setIsOpen(false);
     restoreFocusRef.current?.focus({ preventScroll: true });
@@ -66,8 +71,6 @@ export function App({ onReady }: AppProps) {
         isOpenRef.current = true;
         restoreFocusRef.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        restoreScrollRef.current = hasOpenedRef.current;
-        hasOpenedRef.current = true;
         searchRef.current.restoreHighlights(activeId);
         setIsOpen(true);
       }
@@ -93,12 +96,6 @@ export function App({ onReady }: AppProps) {
   useEffect(() => {
     if (!isOpen) return;
     focusInput();
-    if (restoreScrollRef.current) {
-      restoreScrollRef.current = false;
-      requestAnimationFrame(() => {
-        resultsRef.current?.scrollTo({ top: resultsScrollTopRef.current });
-      });
-    }
   }, [focusInput, isOpen]);
 
   const runSearch = useCallback(
@@ -121,6 +118,9 @@ export function App({ onReady }: AppProps) {
       const nextResult = preservePosition
         ? response.results.find((result) => result.id === resolvedId)
         : response.results[0];
+      if (!preservePosition) {
+        suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
+      }
       setActiveId(
         nextResult && searchRef.current.select(nextResult.id, { scroll: !preservePosition })
           ? nextResult.id
@@ -163,20 +163,28 @@ export function App({ onReady }: AppProps) {
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
       refreshTimeout = window.setTimeout(() => runSearch(true), 250);
     };
+    const handlePageScroll = (event: Event) => {
+      if (event.composedPath().includes(resultsRef.current as EventTarget)) return;
+      if (performance.now() < suppressPageScrollRefreshUntilRef.current) return;
+      scheduleRefresh();
+    };
 
     const observer = new MutationObserver(scheduleRefresh);
     observeRoot(document.body);
     observeOpenShadowRoots();
-    window.addEventListener('scroll', scheduleRefresh, { capture: true, passive: true });
+    window.addEventListener('scroll', handlePageScroll, { capture: true, passive: true });
 
     return () => {
       observer.disconnect();
-      window.removeEventListener('scroll', scheduleRefresh, { capture: true });
+      window.removeEventListener('scroll', handlePageScroll, { capture: true });
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
     };
   }, [isOpen, query, runSearch]);
 
   const selectResult = (result: SearchResultView, scroll = true) => {
+    if (scroll) {
+      suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
+    }
     if (searchRef.current.select(result.id, { scroll })) {
       setActiveId(result.id);
       return;
@@ -213,11 +221,34 @@ export function App({ onReady }: AppProps) {
       requestAnimationFrame(() => resultsRef.current?.scrollTo({ top: scrollTop }));
       return;
     }
-    const activeResult = resultsRef.current?.querySelector<HTMLElement>(
-      `[data-result-id="${CSS.escape(activeId)}"]`,
-    );
-    activeResult?.scrollIntoView({ block: 'nearest' });
-  }, [activeId]);
+    if (skipNextResultListScrollRef.current) {
+      skipNextResultListScrollRef.current = false;
+      return;
+    }
+    const activeIndex = results.findIndex((result) => result.id === activeId);
+    if (activeIndex < 0) return;
+
+    resultVirtualizer.scrollToIndex(activeIndex, { align: 'auto' });
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const container = resultsRef.current;
+        const activeResult = container?.querySelector<HTMLElement>(
+          `[data-index="${activeIndex}"]`,
+        );
+        if (!container || !activeResult) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const resultRect = activeResult.getBoundingClientRect();
+        if (resultRect.top < containerRect.top) {
+          container.scrollTop += resultRect.top - containerRect.top;
+        } else if (resultRect.bottom > containerRect.bottom) {
+          container.scrollTop += resultRect.bottom - containerRect.bottom;
+        }
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [activeId, resultVirtualizer, results]);
 
   const hasQuery = query.length > 0;
   const activeIndex = results.findIndex((result) => result.id === activeId);
@@ -254,7 +285,9 @@ export function App({ onReady }: AppProps) {
       className="findinpage-panel"
       role="search"
       aria-label="Find in Page page search"
-      hidden={!isOpen}
+      aria-hidden={!isOpen}
+      data-open={isOpen}
+      inert={isOpen ? undefined : true}
     >
       <div className="findinpage-toolbar">
         <Input
@@ -345,37 +378,58 @@ export function App({ onReady }: AppProps) {
           </div>
         )}
 
-        {results.map((result) => (
-          <Button
-            key={result.id}
-            type="button"
-            variant="result"
-            size="result"
-            id={`findinpage-result-${result.id}`}
-            role="option"
-            tabIndex={-1}
-            data-result-id={result.id}
-            aria-selected={activeId === result.id}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => selectResult(result)}
+        {results.length > 0 && (
+          <div
+            className="findinpage-results-virtual"
+            role="presentation"
+            style={{ height: `${resultVirtualizer.getTotalSize()}px` }}
           >
-            <span className="findinpage-index">
-              {result.order}
-            </span>
-            <span className="findinpage-result-copy">
-              {result.before}
-              <mark
-                className={cn(
-                  'findinpage-match',
-                  activeId === result.id && 'findinpage-match--active',
-                )}
-              >
-                {result.match}
-              </mark>
-              {result.after}
-            </span>
-          </Button>
-        ))}
+            {resultVirtualizer.getVirtualItems().map((virtualItem) => {
+              const result = results[virtualItem.index];
+              return (
+                <Button
+                  key={virtualItem.key}
+                  ref={resultVirtualizer.measureElement}
+                  type="button"
+                  variant="result"
+                  size="result"
+                  id={`findinpage-result-${result.id}`}
+                  role="option"
+                  tabIndex={-1}
+                  data-index={virtualItem.index}
+                  data-result-id={result.id}
+                  aria-posinset={virtualItem.index + 1}
+                  aria-setsize={results.length}
+                  aria-selected={activeId === result.id}
+                  style={{ transform: `translateY(${virtualItem.start}px)` }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    if (result.id !== activeId) {
+                      skipNextResultListScrollRef.current = true;
+                    }
+                    selectResult(result);
+                  }}
+                >
+                  <span className="findinpage-index">
+                    {result.order}
+                  </span>
+                  <span className="findinpage-result-copy">
+                    {result.before}
+                    <mark
+                      className={cn(
+                        'findinpage-match',
+                        activeId === result.id && 'findinpage-match--active',
+                      )}
+                    >
+                      {result.match}
+                    </mark>
+                    {result.after}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
     </section>

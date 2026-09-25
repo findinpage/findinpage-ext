@@ -167,8 +167,9 @@
     color: var(--card-foreground);
 }
 
-.findinpage-panel[hidden] {
-    display: none;
+.findinpage-panel[data-open="false"] {
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .findinpage-toolbar {
@@ -249,15 +250,18 @@
     background: var(--card);
     box-shadow: none;
     overscroll-behavior: contain;
-    scrollbar-width: none;
+    scrollbar-width: thin;
 }
 
-.findinpage-results::-webkit-scrollbar {
-    display: none;
+.findinpage-results-virtual {
+    position: relative;
+    width: 100%;
 }
 
 .findinpage-result {
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
     display: grid;
     min-height: var(--findinpage-result-min-height);
     width: 100%;

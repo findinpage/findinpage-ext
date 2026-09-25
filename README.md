@@ -11,7 +11,8 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   close the panel.
 - **Context-rich results:** see every match in document order, numbered and
   shown with the surrounding text instead of stepping through matches one at a
-  time.
+  time. The result list is virtualized so large result sets do not mount every
+  row at once.
 - **Fast navigation:** click a result, use the previous/next buttons, or press
   the Up and Down arrow keys while the panel is focused. Press Enter in the
   search field to run a pending search or move to the next result. Previous and
