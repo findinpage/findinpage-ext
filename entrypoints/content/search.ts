@@ -58,6 +58,7 @@ export interface SearchResponse {
 
 type HighlightRegistry = {
   delete(name: string): void;
+  get(name: string): Highlight | undefined;
   set(name: string, highlight: Highlight): void;
 };
 
@@ -344,6 +345,8 @@ export class PageSearch {
 
   private clearHighlights(): void {
     const registry = getHighlightRegistry();
+    registry?.get(ACTIVE_HIGHLIGHT_NAME)?.clear();
+    registry?.get(ALL_HIGHLIGHTS_NAME)?.clear();
     registry?.delete(ACTIVE_HIGHLIGHT_NAME);
     registry?.delete(ALL_HIGHLIGHTS_NAME);
   }

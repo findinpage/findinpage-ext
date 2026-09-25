@@ -86,6 +86,8 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
   const close = useCallback(() => {
     if (!isOpenRef.current) return;
     isOpenRef.current = false;
+    // WebKit repaints mutated highlights more reliably while their host UI is visible.
+    searchRef.current.hideHighlights();
     setPanelVisibility(false);
     setIsOpen(false);
     restoreFocusRef.current?.focus({ preventScroll: true });
