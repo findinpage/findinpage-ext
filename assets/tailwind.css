@@ -67,7 +67,7 @@
     0 4px 10px rgb(0 0 0 / 12%),
     0 14px 36px rgb(0 0 0 / 20%);
   --findinpage-toolbar-shadow: 0 2px 7px rgb(0 0 0 / 7%);
-  --findinpage-focus-width: 2px;
+  --findinpage-focus-width: 3px;
   --findinpage-focus-radius: calc(var(--findinpage-surface-radius) - var(--findinpage-panel-border-width));
   --findinpage-focus-background: var(--card);
   --findinpage-toolbar-height: 52px;
