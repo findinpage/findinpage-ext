@@ -35,10 +35,11 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 - **Local and private:** searches run entirely in the current tab. Page text and
   queries are never sent over the network.
 
-Search is case-insensitive and treats the query as literal text. Find in Page
-searches the top-level Light DOM and accessible open Shadow DOM, and shows up to
-500 matches, including context drawn from the nearest paragraph, list item,
-table cell, heading, blockquote, or preformatted block when available.
+Search is case-insensitive and treats the complete query, including spaces, as
+literal text. Find in Page searches the top-level Light DOM and accessible open
+Shadow DOM, and shows every match, including context drawn from the nearest
+paragraph, list item, table cell, heading, blockquote, or preformatted block
+when available.
 
 ## Development
 
@@ -84,7 +85,7 @@ The configuration is stored in `components.json`, and shared theme tokens live i
 
 Find in Page searches visible text nodes currently present in the top-level DOM
 and open Shadow DOM of ordinary HTTP and HTTPS pages. It supports one
-case-insensitive literal query and displays up to 500 results.
+case-insensitive literal query and does not limit the number of results.
 
 The MVP does not search:
 

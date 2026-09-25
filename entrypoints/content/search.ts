@@ -1,4 +1,3 @@
-export const MAX_RESULTS = 500;
 export const ACTIVE_HIGHLIGHT_NAME = 'findinpage-active-match';
 export const ALL_HIGHLIGHTS_NAME = 'findinpage-all-matches';
 
@@ -54,7 +53,6 @@ interface SelectionAnchor {
 
 export interface SearchResponse {
   results: SearchResultView[];
-  truncated: boolean;
   durationMs: number;
 }
 
@@ -95,22 +93,26 @@ function isRangeInViewport(range: Range): boolean {
 
 function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): boolean {
   const parent = node.parentElement;
-  if (!parent || !node.nodeValue?.trim() || parent.closest(EXCLUDED_SELECTOR)) {
+  if (!parent || !node.nodeValue || parent.closest(EXCLUDED_SELECTOR)) {
     return false;
   }
 
   const cached = visibilityCache.get(parent);
-  if (cached !== undefined) return cached;
+  if (cached === false) return false;
+  if (cached === undefined) {
+    const style = getComputedStyle(parent);
+    const visible =
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.visibility !== 'collapse' &&
+      parent.getClientRects().length > 0;
+    visibilityCache.set(parent, visible);
+    if (!visible) return false;
+  }
 
-  const style = getComputedStyle(parent);
-  const visible =
-    style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    style.visibility !== 'collapse' &&
-    parent.getClientRects().length > 0;
-
-  visibilityCache.set(parent, visible);
-  return visible;
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  return [...range.getClientRects()].some((rect) => rect.width > 0 && rect.height > 0);
 }
 
 function* walkComposedTextNodes(
@@ -196,15 +198,13 @@ export class PageSearch {
     this.locations.clear();
     this.runId += 1;
 
-    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const normalizedQuery = query.toLocaleLowerCase();
     if (!normalizedQuery) {
-      return { results: [], truncated: false, durationMs: performance.now() - startedAt };
+      return { results: [], durationMs: performance.now() - startedAt };
     }
 
     const results: SearchResultView[] = [];
     const visibilityCache = new Map<Element, boolean>();
-    let foundMoreThanLimit = false;
-
     for (const textNode of walkComposedTextNodes(document.body)) {
       if (!isVisibleTextNode(textNode, visibilityCache)) continue;
       const sourceText = textNode.nodeValue ?? '';
@@ -212,11 +212,6 @@ export class PageSearch {
       let offset = 0;
 
       while ((offset = searchableText.indexOf(normalizedQuery, offset)) !== -1) {
-        if (results.length >= MAX_RESULTS) {
-          foundMoreThanLimit = true;
-          break;
-        }
-
         const range = document.createRange();
         range.setStart(textNode, offset);
         range.setEnd(textNode, offset + normalizedQuery.length);
@@ -243,13 +238,10 @@ export class PageSearch {
 
         offset += Math.max(normalizedQuery.length, 1);
       }
-
-      if (foundMoreThanLimit) break;
     }
 
     const response = {
       results,
-      truncated: foundMoreThanLimit,
       durationMs: performance.now() - startedAt,
     };
     this.renderAllHighlights();

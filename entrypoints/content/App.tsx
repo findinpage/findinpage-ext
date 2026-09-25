@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import {
   installPageHighlightStyles,
   getOpenShadowRoots,
-  MAX_RESULTS,
   PageSearch,
   type SearchResultView,
 } from './search';
@@ -28,7 +27,6 @@ export function App({ onReady }: AppProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultView[]>([]);
-  const [truncated, setTruncated] = useState(false);
   const [activeId, setActiveId] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(false);
@@ -116,7 +114,6 @@ export function App({ onReady }: AppProps) {
       const response = searchRef.current.search(query);
       lastSearchedQueryRef.current = query;
       setResults(response.results);
-      setTruncated(response.truncated);
 
       const resolvedId = selectionAnchor
         ? searchRef.current.resolveSelection(selectionAnchor)
@@ -145,7 +142,7 @@ export function App({ onReady }: AppProps) {
   }, [isOpen, query, runSearch]);
 
   useEffect(() => {
-    if (!isOpen || !query.trim()) return;
+    if (!isOpen || query.length === 0) return;
 
     let refreshTimeout: number | undefined;
     const observedRoots = new Set<Node>();
@@ -187,7 +184,6 @@ export function App({ onReady }: AppProps) {
 
     const refreshed = searchRef.current.search(query);
     setResults(refreshed.results);
-    setTruncated(refreshed.truncated);
     const firstResult = refreshed.results[0];
     setActiveId(
       firstResult && searchRef.current.select(firstResult.id, { scroll: false })
@@ -223,19 +219,17 @@ export function App({ onReady }: AppProps) {
     activeResult?.scrollIntoView({ block: 'nearest' });
   }, [activeId]);
 
-  const hasQuery = query.trim().length > 0;
+  const hasQuery = query.length > 0;
   const activeIndex = results.findIndex((result) => result.id === activeId);
   const currentResult = activeIndex >= 0 ? activeIndex + 1 : 0;
-  const totalResults = truncated ? `${MAX_RESULTS}+` : String(results.length);
+  const totalResults = String(results.length);
   const navigationDisabled = results.length === 0;
   const activeOptionId = activeId ? `findinpage-result-${activeId}` : undefined;
   const searchStatus = !hasQuery
     ? 'Enter a search term.'
     : results.length === 0
       ? 'No matches on this page.'
-      : truncated
-        ? `More than ${MAX_RESULTS} matches. Result ${currentResult} selected.`
-        : `${results.length} ${results.length === 1 ? 'match' : 'matches'}. Result ${currentResult} selected.`;
+      : `${results.length} ${results.length === 1 ? 'match' : 'matches'}. Result ${currentResult} selected.`;
 
   const handleSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
