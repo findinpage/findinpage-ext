@@ -1,0 +1,56 @@
+name: Release web demo
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm compile
+      - run: pnpm build
+      - run: pnpm build:firefox
+      - run: pnpm build:demo
+      - name: Upload demo release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "${{ github.event.release.tag_name }}"
+          dist/demo/findinpage-demo.js
+          dist/demo/manifest.json
+          --clobber
+      - name: Notify website repository
+        if: ${{ env.WEB_REPO_TOKEN != '' }}
+        env:
+          WEB_REPO_TOKEN: ${{ secrets.WEB_REPO_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="$(node -p "require('./dist/demo/manifest.json').version")"
+          SHA256="$(node -p "require('./dist/demo/manifest.json').sha256")"
+          URL="https://github.com/findinpage/findinpage-ext/releases/download/${RELEASE_TAG}/findinpage-demo.js"
+          jq -n \
+            --arg event_type "demo-released" \
+            --arg version "$VERSION" \
+            --arg url "$URL" \
+            --arg sha256 "$SHA256" \
+            '{event_type: $event_type, client_payload: {version: $version, url: $url, sha256: $sha256}}' \
+            | curl --fail-with-body \
+                --request POST \
+                --header "Accept: application/vnd.github+json" \
+                --header "Authorization: Bearer ${WEB_REPO_TOKEN}" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                https://api.github.com/repos/findinpage/findinpage-web/dispatches \
+                --data-binary @-

@@ -22,9 +22,13 @@ export interface FindInPageHandle {
 
 interface AppProps {
   onReady(handle: FindInPageHandle): void;
+  installAction?: {
+    label: string;
+    onClick(): void;
+  };
 }
 
-export function App({ onReady }: AppProps) {
+export function App({ onReady, installAction }: AppProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultView[]>([]);
@@ -463,6 +467,20 @@ export function App({ onReady }: AppProps) {
           </div>
         )}
       </div>
+
+      {installAction && (
+        <div className="findinpage-install">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="findinpage-install-button"
+            onClick={installAction.onClick}
+          >
+            {installAction.label}
+          </Button>
+        </div>
+      )}
 
     </section>
   );

@@ -170,9 +170,15 @@ function createExcerpt(
 ): Pick<SearchResultView, 'before' | 'match' | 'after'> {
   const nodeText = node.nodeValue ?? '';
   const container = node.parentElement?.closest(SEMANTIC_CONTAINER_SELECTOR);
-  const containerText = container instanceof HTMLElement ? container.innerText : nodeText;
-  const nodePosition = containerText.indexOf(nodeText);
-  const contextMatchStart = nodePosition >= 0 ? nodePosition + matchStart : matchStart;
+  const containerText = container?.textContent ?? nodeText;
+  let nodePosition = 0;
+  if (container) {
+    const prefixRange = document.createRange();
+    prefixRange.selectNodeContents(container);
+    prefixRange.setEnd(node, 0);
+    nodePosition = prefixRange.toString().length;
+  }
+  const contextMatchStart = nodePosition + matchStart;
   const contextMatchEnd = contextMatchStart + matchLength;
 
   const beforeStart = Math.max(0, contextMatchStart - 72);

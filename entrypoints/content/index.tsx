@@ -22,6 +22,11 @@ export default defineContentScript({
     let openWhenReady = false;
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
+    if (location.origin === 'https://findin.page') {
+      document.documentElement.dataset.findinpageExtension = '1';
+      document.dispatchEvent(new CustomEvent('findinpage:extension-ready'));
+    }
+
     const resolveColorScheme = (): 'light' | 'dark' => {
       const root = document.documentElement;
       const declaredScheme = root.style.colorScheme;

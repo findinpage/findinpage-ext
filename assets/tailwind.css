@@ -105,6 +105,7 @@
   --findinpage-empty-font-size: 14px;
   --findinpage-empty-line-height: 24px;
   --findinpage-match-padding: 2px;
+  --findinpage-install-height: 48px;
   color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 13px;
@@ -368,6 +369,20 @@
     max-width: var(--findinpage-empty-copy-width);
     margin: 0;
     line-height: var(--findinpage-empty-line-height);
+}
+
+.findinpage-install {
+    display: flex;
+    min-height: var(--findinpage-install-height);
+    align-items: center;
+    justify-content: flex-end;
+    padding-inline: var(--findinpage-toolbar-padding);
+    border-top: 1px solid var(--border);
+    background: var(--card);
+}
+
+.findinpage-install-button {
+    border-radius: var(--radius-md);
 }
 
 @media (hover: hover) {
