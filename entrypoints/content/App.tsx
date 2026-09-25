@@ -301,7 +301,7 @@ export function App({ onReady }: AppProps) {
           aria-expanded={results.length > 0}
           aria-activedescendant={activeOptionId}
           aria-keyshortcuts="Enter ArrowUp ArrowDown"
-          placeholder="Find on this page"
+          placeholder="Find in Page"
           autoComplete="off"
           spellCheck={false}
           value={query}
