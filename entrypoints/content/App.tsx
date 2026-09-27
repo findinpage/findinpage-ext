@@ -152,7 +152,6 @@ export function App({
     searchRef.current.cancelSearch();
     searchTaskIdRef.current = undefined;
     setIsSearching(false);
-    lastSearchSignatureRef.current = undefined;
     searchRef.current.hideHighlights();
     setPanelVisibility(false);
     setIsOpen(false);
