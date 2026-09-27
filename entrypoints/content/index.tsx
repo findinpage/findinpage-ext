@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { App, type FindInPageHandle } from './App';
 import {
@@ -8,6 +8,14 @@ import {
   type SearchOptionsStore,
 } from './search-options';
 import '@/assets/tailwind.css';
+import {
+  getBrowserLocale,
+  getEffectiveLocale,
+  loadLocalePreference,
+  LOCALE_STORAGE_KEY,
+  normalizeLocalePreference,
+  type SupportedLocale,
+} from '@/lib/i18n';
 
 type MountedUi = {
   root: Root;
@@ -36,6 +44,31 @@ const extensionSearchOptionsStore: SearchOptionsStore = {
     }
   },
 };
+
+function LocalizedApp(props: Omit<React.ComponentProps<typeof App>, 'locale'>) {
+  const [locale, setLocale] = useState<SupportedLocale>(getBrowserLocale());
+
+  useEffect(() => {
+    let active = true;
+    void loadLocalePreference().then((preference) => {
+      if (active) setLocale(getEffectiveLocale(preference));
+    });
+    const onStorageChange = (
+      changes: Record<string, Browser.storage.StorageChange>,
+      areaName: string,
+    ) => {
+      if (areaName !== 'local' || !changes[LOCALE_STORAGE_KEY]) return;
+      setLocale(getEffectiveLocale(normalizeLocalePreference(changes[LOCALE_STORAGE_KEY].newValue)));
+    };
+    browser.storage.onChanged.addListener(onStorageChange);
+    return () => {
+      active = false;
+      browser.storage.onChanged.removeListener(onStorageChange);
+    };
+  }, []);
+
+  return <App {...props} locale={locale} />;
+}
 
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -188,7 +221,7 @@ export default defineContentScript({
         const root = createRoot(container);
         root.render(
           <React.StrictMode>
-            <App
+            <LocalizedApp
               searchOptionsStore={extensionSearchOptionsStore}
               onReady={(handle) => {
                 appHandle = handle;

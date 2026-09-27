@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Toggle } from '@/components/ui/toggle';
+import { getBrowserLocale, translate, type SupportedLocale } from '@/lib/i18n';
 import {
   DEFAULT_SEARCH_OPTIONS,
   installPageHighlightStyles,
@@ -42,6 +43,7 @@ interface AppProps {
     onClick(): void;
   };
   searchOptionsStore?: SearchOptionsStore;
+  locale?: SupportedLocale;
 }
 
 export function App({
@@ -49,7 +51,13 @@ export function App({
   initialQuery = '',
   installAction,
   searchOptionsStore,
+  locale = getBrowserLocale(),
 }: AppProps) {
+  const t = useCallback(
+    (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) =>
+      translate(locale, key, values),
+    [locale],
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState(initialQuery);
   const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
@@ -425,10 +433,15 @@ export function App({
   const searchStatus = searchError
     ? ''
     : !hasQuery
-    ? 'Enter a search term.'
+    ? t('enterSearch')
     : results.length === 0
-      ? 'No matches on this page.'
-      : `${isSearching ? 'Searching. ' : ''}${results.length} ${results.length === 1 ? 'match' : 'matches'}. Result ${currentResult} selected.${highlightMode === 'native' ? '' : ' Compatibility highlighting is active.'}`;
+      ? t('noMatches')
+      : [
+          isSearching ? t('searching') : '',
+          t(results.length === 1 ? 'matchOne' : 'matchMany', { count: results.length }) + '.',
+          t('selectedResult', { current: currentResult }),
+          highlightMode === 'native' ? '' : t('compatibilityHighlighting'),
+        ].filter(Boolean).join(' ');
 
   const handleSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
@@ -459,7 +472,9 @@ export function App({
       ref={panelRef}
       className="findinpage-panel"
       role="search"
-      aria-label="Find in Page page search"
+      lang={locale}
+      dir="ltr"
+      aria-label={t('panelLabel')}
       aria-hidden={!isOpen}
       data-open={isOpen}
       inert={isOpen ? undefined : true}
@@ -471,7 +486,7 @@ export function App({
             type="search"
             variant="bare"
             role="combobox"
-            aria-label="Search this page"
+            aria-label={t('searchLabel')}
             aria-autocomplete="none"
             aria-controls="findinpage-results"
             aria-expanded={results.length > 0}
@@ -479,7 +494,7 @@ export function App({
             aria-keyshortcuts="Enter ArrowUp ArrowDown"
             aria-invalid={searchError ? true : undefined}
             aria-describedby={searchError ? 'findinpage-search-error' : undefined}
-            placeholder="Find in Page"
+            placeholder={t('searchPlaceholder')}
             autoComplete="off"
             spellCheck={false}
             value={query}
@@ -500,8 +515,8 @@ export function App({
                 'findinpage-options-trigger',
                 hasActiveSearchOptions && 'findinpage-options-trigger--active',
               )}
-              aria-label="Search options"
-              title="Search options"
+              aria-label={t('searchOptions')}
+              title={t('searchOptions')}
             >
               <span aria-hidden="true">Aa</span>
             </PopoverTrigger>
@@ -510,16 +525,16 @@ export function App({
               align="end"
               side="bottom"
               sideOffset={8}
-              aria-label="Search options"
+              aria-label={t('searchOptions')}
             >
-              <PopoverTitle className="sr-only">Search options</PopoverTitle>
+              <PopoverTitle className="sr-only">{t('searchOptions')}</PopoverTitle>
               <div className="findinpage-options-list">
                 {([
-                  ['caseSensitive', 'Match case', <CaseSensitive data-icon="inline-start" aria-hidden="true" />],
-                  ['wholeWord', 'Match whole word', <WholeWord data-icon="inline-start" aria-hidden="true" />],
+                  ['caseSensitive', t('matchCase'), <CaseSensitive data-icon="inline-start" aria-hidden="true" />],
+                  ['wholeWord', t('matchWholeWord'), <WholeWord data-icon="inline-start" aria-hidden="true" />],
                   [
                     'useRegularExpression',
-                    'Use regular expression',
+                    t('useRegularExpression'),
                     <Asterisk data-icon="inline-start" aria-hidden="true" />,
                   ],
                 ] as const).map(([name, label, icon]) => (
@@ -549,8 +564,8 @@ export function App({
           variant="ghost"
           size="panelIcon"
           type="button"
-          aria-label="Previous result"
-          title="Previous result"
+          aria-label={t('previousResult')}
+          title={t('previousResult')}
           disabled={navigationDisabled}
           onClick={() => navigateResult(-1)}
         >
@@ -560,8 +575,8 @@ export function App({
           variant="ghost"
           size="panelIcon"
           type="button"
-          aria-label="Next result"
-          title="Next result"
+          aria-label={t('nextResult')}
+          title={t('nextResult')}
           disabled={navigationDisabled}
           onClick={() => navigateResult(1)}
         >
@@ -572,8 +587,8 @@ export function App({
           size="panelIcon"
           type="button"
           onClick={close}
-          aria-label="Close Find in Page"
-          title="Close"
+          aria-label={t('closeFind')}
+          title={t('close')}
         >
           <X data-icon="inline-start" aria-hidden="true" />
         </Button>
@@ -581,7 +596,7 @@ export function App({
 
       {searchError && (
         <p id="findinpage-search-error" className="findinpage-search-error" role="alert">
-          {searchError.message}
+          {searchError.code === 'invalid_regular_expression' ? t('invalidRegularExpression') : searchError.message}
         </p>
       )}
 
@@ -590,7 +605,7 @@ export function App({
         ref={resultsRef}
         className="findinpage-results"
         role={results.length > 0 ? 'listbox' : undefined}
-        aria-label="Search results"
+        aria-label={t('resultsLabel')}
       >
         {!hasQuery && (
           <div className="findinpage-empty">
@@ -598,7 +613,7 @@ export function App({
               <Search />
             </div>
             <p className="findinpage-empty-copy">
-              Matches will appear here with their surrounding context.
+              {t('emptyHint')}
             </p>
           </div>
         )}
@@ -606,7 +621,7 @@ export function App({
         {hasQuery && !searchError && results.length === 0 && (
           <div className="findinpage-empty findinpage-empty--compact">
             <p className="findinpage-empty-copy">
-              {isSearching ? 'Searching this page...' : 'No matches on this page.'}
+              {isSearching ? t('searchingPage') : t('noMatches')}
             </p>
           </div>
         )}
@@ -669,8 +684,8 @@ export function App({
       {(isSearching || highlightMode !== 'native') && (
         <p className="findinpage-search-note" role="status">
           {isSearching
-            ? `Searching... ${results.length} ${results.length === 1 ? 'match' : 'matches'} found`
-            : 'Compatibility highlighting is active on this page.'}
+            ? t(results.length === 1 ? 'matchesFoundOne' : 'matchesFoundMany', { count: results.length })
+            : t('compatibilityHighlighting')}
         </p>
       )}
 

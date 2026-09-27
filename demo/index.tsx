@@ -8,11 +8,13 @@ import {
   type SearchOptionsStore,
 } from '@/entrypoints/content/search-options';
 import panelStyles from '@/assets/tailwind.css?inline';
+import { getBrowserLocale, resolveLocale, type SupportedLocale } from '@/lib/i18n';
 
 export interface FindInPageDemoOptions {
   installUrl: string;
   installLabel?: string;
   initialQuery?: string;
+  locale?: SupportedLocale | string;
 }
 
 export interface FindInPageDemoHandle {
@@ -118,6 +120,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
   root.render(
     <React.StrictMode>
       <App
+        locale={options.locale ? resolveLocale([options.locale]) : getBrowserLocale()}
         initialQuery={options.initialQuery}
         searchOptionsStore={demoSearchOptionsStore}
         installAction={{
