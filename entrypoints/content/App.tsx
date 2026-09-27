@@ -601,6 +601,7 @@ export function App({
                       skipNextResultListScrollRef.current = true;
                     }
                     selectResult(result);
+                    focusInputWithoutSelection();
                   }}
                 >
                   <span className="findinpage-index">
