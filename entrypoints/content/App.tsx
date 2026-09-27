@@ -1,16 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronUp, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import {
+  DEFAULT_SEARCH_OPTIONS,
   installPageHighlightStyles,
   getAccessibleDocuments,
   getOpenShadowRoots,
   PageSearch,
+  type SearchError,
+  type SearchOptions,
   type SearchResultView,
 } from './search';
+import type { SearchOptionsStore } from './search-options';
 
 export interface FindInPageHandle {
   openAndFocus(): void;
@@ -18,6 +29,7 @@ export interface FindInPageHandle {
   close(): void;
   focus(): void;
   isOpen(): boolean;
+  closeTransient(): boolean;
   destroy(): void;
 }
 
@@ -28,20 +40,31 @@ interface AppProps {
     label: string;
     onClick(): void;
   };
+  searchOptionsStore?: SearchOptionsStore;
 }
 
-export function App({ onReady, initialQuery = '', installAction }: AppProps) {
+export function App({
+  onReady,
+  initialQuery = '',
+  installAction,
+  searchOptionsStore,
+}: AppProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState(initialQuery);
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
+  const [searchError, setSearchError] = useState<SearchError>();
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [portalContainer, setPortalContainer] = useState<ShadowRoot | null>(null);
   const [results, setResults] = useState<SearchResultView[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const panelRef = useRef<HTMLElement>(null);
+  const optionsOpenRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef(new PageSearch());
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const lastSearchedQueryRef = useRef<string | undefined>(undefined);
+  const lastSearchSignatureRef = useRef<string | undefined>(undefined);
   const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
   const skipNextResultListScrollRef = useRef(false);
   const suppressPageScrollRefreshUntilRef = useRef(0);
@@ -54,6 +77,32 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
   });
 
   useEffect(() => installPageHighlightStyles(), []);
+
+  useEffect(() => {
+    if (!searchOptionsStore) return;
+    let active = true;
+    void searchOptionsStore.load().then((options) => {
+      if (active) setSearchOptions(options);
+    });
+    const unsubscribe = searchOptionsStore.subscribe((options) => {
+      if (active) setSearchOptions(options);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [searchOptionsStore]);
+
+  const setPanelRef = useCallback((panel: HTMLElement | null) => {
+    panelRef.current = panel;
+    const root = panel?.getRootNode();
+    setPortalContainer(root instanceof ShadowRoot ? root : null);
+  }, []);
+
+  const setOptionsVisibility = useCallback((open: boolean) => {
+    optionsOpenRef.current = open;
+    setOptionsOpen(open);
+  }, []);
 
   const setPanelVisibility = useCallback((visible: boolean) => {
     const panel = panelRef.current;
@@ -87,6 +136,7 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
   const close = useCallback(() => {
     if (!isOpenRef.current) return;
     isOpenRef.current = false;
+    setOptionsVisibility(false);
     // WebKit repaints mutated highlights more reliably while their host UI is visible.
     searchRef.current.hideHighlights();
     setPanelVisibility(false);
@@ -96,7 +146,7 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
     deferHighlightUpdate(() => {
       if (!isOpenRef.current) searchRef.current.hideHighlights();
     });
-  }, [deferHighlightUpdate, setPanelVisibility]);
+  }, [deferHighlightUpdate, setOptionsVisibility, setPanelVisibility]);
 
   useEffect(() => {
     const open = () => {
@@ -122,6 +172,11 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
       close,
       focus: focusInput,
       isOpen: () => isOpenRef.current,
+      closeTransient() {
+        if (!optionsOpenRef.current) return false;
+        setOptionsVisibility(false);
+        return true;
+      },
       destroy() {
         if (highlightFrameRef.current !== undefined) {
           cancelAnimationFrame(highlightFrameRef.current);
@@ -130,7 +185,7 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
       },
     };
     onReady(handle);
-  }, [activeId, close, deferHighlightUpdate, focusInput, onReady, setPanelVisibility]);
+  }, [activeId, close, deferHighlightUpdate, focusInput, onReady, setOptionsVisibility, setPanelVisibility]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -147,8 +202,9 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
         pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
       }
 
-      const response = searchRef.current.search(query);
-      lastSearchedQueryRef.current = query;
+      const response = searchRef.current.search(query, searchOptions);
+      lastSearchSignatureRef.current = JSON.stringify([query, searchOptions]);
+      setSearchError(response.error);
       setResults(response.results);
 
       const resolvedId = selectionAnchor
@@ -166,19 +222,19 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
           : undefined,
       );
     },
-    [activeId, query],
+    [activeId, query, searchOptions],
   );
 
   useEffect(() => {
     if (!isOpen) return;
-    if (lastSearchedQueryRef.current === query) return;
+    if (lastSearchSignatureRef.current === JSON.stringify([query, searchOptions])) return;
 
     const timeout = window.setTimeout(() => {
       runSearch(false);
     }, 120);
 
     return () => window.clearTimeout(timeout);
-  }, [isOpen, query, runSearch]);
+  }, [isOpen, query, runSearch, searchOptions]);
 
   useEffect(() => {
     if (!isOpen || query.length === 0) return;
@@ -260,7 +316,8 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
       return;
     }
 
-    const refreshed = searchRef.current.search(query);
+    const refreshed = searchRef.current.search(query, searchOptions);
+    setSearchError(refreshed.error);
     setResults(refreshed.results);
     const firstResult = refreshed.results[0];
     setActiveId(
@@ -321,12 +378,15 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
   }, [activeId, resultVirtualizer, results]);
 
   const hasQuery = query.length > 0;
+  const hasActiveSearchOptions = Object.values(searchOptions).some(Boolean);
   const activeIndex = results.findIndex((result) => result.id === activeId);
   const currentResult = activeIndex >= 0 ? activeIndex + 1 : 0;
   const totalResults = String(results.length);
   const navigationDisabled = results.length === 0;
   const activeOptionId = activeId ? `findinpage-result-${activeId}` : undefined;
-  const searchStatus = !hasQuery
+  const searchStatus = searchError
+    ? ''
+    : !hasQuery
     ? 'Enter a search term.'
     : results.length === 0
       ? 'No matches on this page.'
@@ -336,7 +396,7 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
     if (event.nativeEvent.isComposing) return;
     if (event.key === 'Enter') {
       event.preventDefault();
-      if (lastSearchedQueryRef.current !== query) {
+      if (lastSearchSignatureRef.current !== JSON.stringify([query, searchOptions])) {
         runSearch(false);
       } else if (!navigationDisabled) {
         navigateResult(1);
@@ -350,9 +410,15 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
     }
   };
 
+  const updateSearchOption = (name: keyof SearchOptions, checked: boolean) => {
+    const nextOptions = { ...searchOptions, [name]: checked };
+    setSearchOptions(nextOptions);
+    void searchOptionsStore?.save(nextOptions);
+  };
+
   return (
     <section
-      ref={panelRef}
+      ref={setPanelRef}
       className="findinpage-panel"
       role="search"
       aria-label="Find in Page page search"
@@ -372,6 +438,8 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
           aria-expanded={results.length > 0}
           aria-activedescendant={activeOptionId}
           aria-keyshortcuts="Enter ArrowUp ArrowDown"
+          aria-invalid={searchError ? true : undefined}
+          aria-describedby={searchError ? 'findinpage-search-error' : undefined}
           placeholder="Find in Page"
           autoComplete="off"
           spellCheck={false}
@@ -391,6 +459,43 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
           {searchStatus}
         </span>
         <span className="findinpage-divider" aria-hidden="true" />
+        <Popover open={optionsOpen} onOpenChange={setOptionsVisibility}>
+          <PopoverTrigger
+            className={cn(
+              buttonVariants({ variant: 'ghost', size: 'panelIcon' }),
+              hasActiveSearchOptions && 'findinpage-options-trigger--active',
+            )}
+            aria-label="Search options"
+            title="Search options"
+          >
+            <SlidersHorizontal data-icon="inline-start" aria-hidden="true" />
+          </PopoverTrigger>
+          <PopoverContent
+            container={portalContainer}
+            align="end"
+            side="bottom"
+            sideOffset={8}
+            aria-label="Search options"
+          >
+            <PopoverTitle className="sr-only">Search options</PopoverTitle>
+            <div className="findinpage-options-list">
+              {([
+                ['caseSensitive', 'Match case'],
+                ['wholeWord', 'Match whole word'],
+                ['useRegularExpression', 'Use regular expression'],
+              ] as const).map(([name, label]) => (
+                <label className="findinpage-options-item" key={name}>
+                  <Checkbox
+                    aria-label={label}
+                    checked={searchOptions[name]}
+                    onCheckedChange={(checked) => updateSearchOption(name, checked)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
         <Button
           variant="ghost"
           size="panelIcon"
@@ -425,6 +530,12 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
         </Button>
       </div>
 
+      {searchError && (
+        <p id="findinpage-search-error" className="findinpage-search-error" role="alert">
+          {searchError.message}
+        </p>
+      )}
+
       <div
         id="findinpage-results"
         ref={resultsRef}
@@ -443,7 +554,7 @@ export function App({ onReady, initialQuery = '', installAction }: AppProps) {
           </div>
         )}
 
-        {hasQuery && results.length === 0 && (
+        {hasQuery && !searchError && results.length === 0 && (
           <div className="findinpage-empty findinpage-empty--compact">
             <p className="findinpage-empty-copy">No matches on this page.</p>
           </div>

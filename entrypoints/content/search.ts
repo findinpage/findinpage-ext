@@ -36,6 +36,23 @@ export interface SearchResultView {
   order: number;
 }
 
+export interface SearchOptions {
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  useRegularExpression: boolean;
+}
+
+export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
+  caseSensitive: false,
+  wholeWord: false,
+  useRegularExpression: false,
+};
+
+export interface SearchError {
+  code: 'invalid_regular_expression';
+  message: string;
+}
+
 interface MatchLocation {
   range?: Range;
   control?: HTMLTextAreaElement;
@@ -58,6 +75,7 @@ interface SelectionAnchor {
 export interface SearchResponse {
   results: SearchResultView[];
   durationMs: number;
+  error?: SearchError;
 }
 
 type HighlightRegistry = {
@@ -83,6 +101,37 @@ function normalizeWhitespace(value: string): string {
 
 function createResultSignature(view: Pick<SearchResultView, 'before' | 'match' | 'after'>): string {
   return `${view.before}\u0000${view.match}\u0000${view.after}`;
+}
+
+const WORD_CHARACTER_PATTERN = /[\p{L}\p{N}_]/u;
+
+function escapeRegularExpression(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getPreviousCodePoint(value: string, offset: number): string | undefined {
+  if (offset <= 0) return undefined;
+  const trailingUnit = value.charCodeAt(offset - 1);
+  const startsWithLowSurrogate = trailingUnit >= 0xdc00 && trailingUnit <= 0xdfff;
+  if (startsWithLowSurrogate && offset > 1) {
+    const leadingUnit = value.charCodeAt(offset - 2);
+    if (leadingUnit >= 0xd800 && leadingUnit <= 0xdbff) {
+      return value.slice(offset - 2, offset);
+    }
+  }
+  return value[offset - 1];
+}
+
+function getNextCodePoint(value: string, offset: number): string | undefined {
+  const codePoint = value.codePointAt(offset);
+  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
+}
+
+function hasWholeWordBoundaries(value: string, start: number, end: number): boolean {
+  const before = getPreviousCodePoint(value, start);
+  const after = getNextCodePoint(value, end);
+  return (!before || !WORD_CHARACTER_PATTERN.test(before)) &&
+    (!after || !WORD_CHARACTER_PATTERN.test(after));
 }
 
 function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): boolean {
@@ -307,15 +356,31 @@ export class PageSearch {
   private frameHighlightStyles = new Map<Document, HTMLStyleElement>();
   private runId = 0;
 
-  search(query: string): SearchResponse {
+  search(query: string, options: SearchOptions = DEFAULT_SEARCH_OPTIONS): SearchResponse {
     const startedAt = performance.now();
     this.clearHighlights();
     this.locations.clear();
     this.runId += 1;
 
-    const normalizedQuery = query.toLocaleLowerCase();
-    if (!normalizedQuery) {
+    if (!query) {
       return { results: [], durationMs: performance.now() - startedAt };
+    }
+
+    let matcher: RegExp;
+    try {
+      matcher = new RegExp(
+        options.useRegularExpression ? query : escapeRegularExpression(query),
+        `gu${options.caseSensitive ? '' : 'i'}`,
+      );
+    } catch {
+      return {
+        results: [],
+        durationMs: performance.now() - startedAt,
+        error: {
+          code: 'invalid_regular_expression',
+          message: 'Invalid regular expression.',
+        },
+      };
     }
 
     const results: SearchResultView[] = [];
@@ -330,14 +395,28 @@ export class PageSearch {
       const sourceText = isTextArea
         ? (source as HTMLTextAreaElement).value
         : (source as Text).nodeValue ?? '';
-      const searchableText = sourceText.toLocaleLowerCase();
-      let offset = 0;
+      matcher.lastIndex = 0;
+      let match: RegExpExecArray | null;
 
-      while ((offset = searchableText.indexOf(normalizedQuery, offset)) !== -1) {
+      while ((match = matcher.exec(sourceText)) !== null) {
+        const offset = match.index;
+        const matchLength = match[0].length;
+        if (matchLength === 0) {
+          const nextCodePoint = sourceText.codePointAt(matcher.lastIndex);
+          matcher.lastIndex += nextCodePoint !== undefined && nextCodePoint > 0xffff ? 2 : 1;
+          continue;
+        }
+        if (
+          options.wholeWord &&
+          !hasWholeWordBoundaries(sourceText, offset, offset + matchLength)
+        ) {
+          continue;
+        }
+
         const ownerDocument = source.ownerDocument;
         const range = isTextArea ? undefined : ownerDocument.createRange();
         range?.setStart(source, offset);
-        range?.setEnd(source, offset + normalizedQuery.length);
+        range?.setEnd(source, offset + matchLength);
 
         const id = `${this.runId}-${results.length}`;
         const scrollTarget =
@@ -348,13 +427,13 @@ export class PageSearch {
 
         if (scrollTarget) {
           const view = isTextArea
-            ? createValueExcerpt(sourceText, offset, normalizedQuery.length)
-            : createExcerpt(source as Text, offset, normalizedQuery.length);
+            ? createValueExcerpt(sourceText, offset, matchLength)
+            : createExcerpt(source as Text, offset, matchLength);
           this.locations.set(id, {
             range,
             control: isTextArea ? source as HTMLTextAreaElement : undefined,
             matchStart: offset,
-            matchEnd: offset + normalizedQuery.length,
+            matchEnd: offset + matchLength,
             scrollTarget,
             document: ownerDocument,
             signature: createResultSignature(view),
@@ -367,7 +446,6 @@ export class PageSearch {
           });
         }
 
-        offset += Math.max(normalizedQuery.length, 1);
       }
     }
 

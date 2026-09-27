@@ -1,6 +1,12 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { App, type FindInPageHandle } from './App';
+import {
+  normalizeSearchOptions,
+  SEARCH_OPTIONS_STORAGE_KEY,
+  serializeSearchOptions,
+  type SearchOptionsStore,
+} from './search-options';
 import '@/assets/tailwind.css';
 
 type MountedUi = {
@@ -9,6 +15,38 @@ type MountedUi = {
 
 type FindInPageMessage = {
   type: 'TOGGLE_FIND_IN_PAGE';
+};
+
+const extensionSearchOptionsStore: SearchOptionsStore = {
+  async load() {
+    try {
+      const stored = await browser.storage.local.get(SEARCH_OPTIONS_STORAGE_KEY);
+      return normalizeSearchOptions(stored[SEARCH_OPTIONS_STORAGE_KEY]);
+    } catch {
+      return normalizeSearchOptions(undefined);
+    }
+  },
+  async save(options) {
+    try {
+      await browser.storage.local.set({
+        [SEARCH_OPTIONS_STORAGE_KEY]: serializeSearchOptions(options),
+      });
+    } catch {
+      // Search remains usable with in-memory preferences when storage is unavailable.
+    }
+  },
+  subscribe(listener) {
+    const onChanged = (
+      changes: Record<string, Browser.storage.StorageChange>,
+      areaName: string,
+    ) => {
+      if (areaName !== 'local') return;
+      const changed = changes[SEARCH_OPTIONS_STORAGE_KEY];
+      if (changed) listener(normalizeSearchOptions(changed.newValue));
+    };
+    browser.storage.onChanged.addListener(onChanged);
+    return () => browser.storage.onChanged.removeListener(onChanged);
+  },
 };
 
 export default defineContentScript({
@@ -88,6 +126,7 @@ export default defineContentScript({
 
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (appHandle.closeTransient()) return;
       appHandle.close();
     };
 
@@ -162,6 +201,7 @@ export default defineContentScript({
         root.render(
           <React.StrictMode>
             <App
+              searchOptionsStore={extensionSearchOptionsStore}
               onReady={(handle) => {
                 appHandle = handle;
                 if (openWhenReady) {

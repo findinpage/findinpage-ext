@@ -1,6 +1,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App, type FindInPageHandle } from '@/entrypoints/content/App';
+import {
+  normalizeSearchOptions,
+  SEARCH_OPTIONS_STORAGE_KEY,
+  serializeSearchOptions,
+  type SearchOptionsStore,
+} from '@/entrypoints/content/search-options';
 import panelStyles from '@/assets/tailwind.css?inline';
 
 export interface FindInPageDemoOptions {
@@ -24,6 +30,39 @@ declare global {
     };
   }
 }
+
+const demoSearchOptionsStore: SearchOptionsStore = {
+  async load() {
+    try {
+      const value = localStorage.getItem(SEARCH_OPTIONS_STORAGE_KEY);
+      return normalizeSearchOptions(value ? JSON.parse(value) : undefined);
+    } catch {
+      return normalizeSearchOptions(undefined);
+    }
+  },
+  async save(options) {
+    try {
+      localStorage.setItem(
+        SEARCH_OPTIONS_STORAGE_KEY,
+        JSON.stringify(serializeSearchOptions(options)),
+      );
+    } catch {
+      // Search remains usable with in-memory preferences when storage is unavailable.
+    }
+  },
+  subscribe(listener) {
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea !== localStorage || event.key !== SEARCH_OPTIONS_STORAGE_KEY) return;
+      try {
+        listener(normalizeSearchOptions(event.newValue ? JSON.parse(event.newValue) : undefined));
+      } catch {
+        listener(normalizeSearchOptions(undefined));
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  },
+};
 
 function resolveColorScheme(): 'light' | 'dark' {
   const root = document.documentElement;
@@ -83,6 +122,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
     if (event.key !== 'Escape' || !appHandle?.isOpen()) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (appHandle.closeTransient()) return;
     appHandle.close();
   };
   window.addEventListener('keydown', onEscape, { capture: true });
@@ -91,6 +131,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
     <React.StrictMode>
       <App
         initialQuery={options.initialQuery}
+        searchOptionsStore={demoSearchOptionsStore}
         installAction={{
           label: options.installLabel ?? 'Add to browser',
           onClick() {

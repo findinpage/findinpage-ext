@@ -18,6 +18,9 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   search field to run a pending search or move to the next result. Previous and
   next navigation wraps at either end. Choosing a result centers its source text
   in the viewport.
+- **Precise matching:** open Search options to match case, require Unicode whole
+  words, use a regular expression, or combine all three behaviors. Preferences
+  are retained across pages and browser sessions.
 - **Clear page highlights:** all matches are highlighted on the page, with the
   active match shown in a distinct style. Highlights disappear when the panel
   closes.
@@ -37,7 +40,12 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   queries are never sent over the network.
 
 Search is case-insensitive and treats the complete query, including spaces, as
-literal text. Find in Page searches the top-level Light DOM, accessible open
+literal text by default. `Match case` requires exact casing. `Match whole word`
+treats Unicode letters, Unicode numbers, and underscores as word characters.
+`Use regular expression` interprets the input as a raw JavaScript pattern
+without `/.../flags` delimiters; Unicode and global matching are automatic, and
+the case option controls case sensitivity. The three options can be combined.
+Find in Page searches the top-level Light DOM, accessible open
 Shadow DOM, and same-origin iframes, and shows every match, including context
 drawn from the nearest paragraph, list item, table cell, heading, blockquote, or
 preformatted block when available.
@@ -88,8 +96,9 @@ The configuration is stored in `components.json`, and shared theme tokens live i
 
 Find in Page searches visible text nodes currently present in the top-level DOM,
 open Shadow DOM, and same-origin iframes of ordinary HTTP and HTTPS pages. It
-supports one case-insensitive literal query and does not limit the number of
-results.
+supports literal, case-sensitive, Unicode whole-word, and regular-expression
+queries and does not limit the number of results. Matching stays within each
+individual text node or textarea value and does not join adjacent DOM nodes.
 
 The MVP does not search:
 
