@@ -13,7 +13,6 @@ interface StoredSearchOptions extends SearchOptions {
 export interface SearchOptionsStore {
   load(): Promise<SearchOptions>;
   save(options: SearchOptions): Promise<void>;
-  subscribe(listener: (options: SearchOptions) => void): () => void;
 }
 
 export function normalizeSearchOptions(value: unknown): SearchOptions {

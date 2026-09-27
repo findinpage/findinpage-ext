@@ -50,18 +50,6 @@ const demoSearchOptionsStore: SearchOptionsStore = {
       // Search remains usable with in-memory preferences when storage is unavailable.
     }
   },
-  subscribe(listener) {
-    const onStorage = (event: StorageEvent) => {
-      if (event.storageArea !== localStorage || event.key !== SEARCH_OPTIONS_STORAGE_KEY) return;
-      try {
-        listener(normalizeSearchOptions(event.newValue ? JSON.parse(event.newValue) : undefined));
-      } catch {
-        listener(normalizeSearchOptions(undefined));
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  },
 };
 
 function resolveColorScheme(): 'light' | 'dark' {

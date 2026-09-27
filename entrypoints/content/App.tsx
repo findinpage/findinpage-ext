@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronDown, ChevronUp, Search, SlidersHorizontal, X } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Asterisk, CaseSensitive, Check, ChevronDown, ChevronUp, Search, WholeWord, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Popover,
@@ -11,6 +10,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { Toggle } from '@/components/ui/toggle';
 import {
   DEFAULT_SEARCH_OPTIONS,
   installPageHighlightStyles,
@@ -54,7 +54,6 @@ export function App({
   const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
   const [searchError, setSearchError] = useState<SearchError>();
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const [portalContainer, setPortalContainer] = useState<ShadowRoot | null>(null);
   const [results, setResults] = useState<SearchResultView[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const panelRef = useRef<HTMLElement>(null);
@@ -84,25 +83,24 @@ export function App({
     void searchOptionsStore.load().then((options) => {
       if (active) setSearchOptions(options);
     });
-    const unsubscribe = searchOptionsStore.subscribe((options) => {
-      if (active) setSearchOptions(options);
-    });
     return () => {
       active = false;
-      unsubscribe();
     };
   }, [searchOptionsStore]);
-
-  const setPanelRef = useCallback((panel: HTMLElement | null) => {
-    panelRef.current = panel;
-    const root = panel?.getRootNode();
-    setPortalContainer(root instanceof ShadowRoot ? root : null);
-  }, []);
 
   const setOptionsVisibility = useCallback((open: boolean) => {
     optionsOpenRef.current = open;
     setOptionsOpen(open);
   }, []);
+
+  const focusInputWithoutSelection = useCallback(() => {
+    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
+  }, []);
+
+  const handleOptionsOpenChange = useCallback((open: boolean) => {
+    setOptionsVisibility(open);
+    if (!open && isOpenRef.current) focusInputWithoutSelection();
+  }, [focusInputWithoutSelection, setOptionsVisibility]);
 
   const setPanelVisibility = useCallback((visible: boolean) => {
     const panel = panelRef.current;
@@ -136,7 +134,8 @@ export function App({
   const close = useCallback(() => {
     if (!isOpenRef.current) return;
     isOpenRef.current = false;
-    setOptionsVisibility(false);
+    optionsOpenRef.current = false;
+    setOptionsOpen(false);
     // WebKit repaints mutated highlights more reliably while their host UI is visible.
     searchRef.current.hideHighlights();
     setPanelVisibility(false);
@@ -146,7 +145,7 @@ export function App({
     deferHighlightUpdate(() => {
       if (!isOpenRef.current) searchRef.current.hideHighlights();
     });
-  }, [deferHighlightUpdate, setOptionsVisibility, setPanelVisibility]);
+  }, [deferHighlightUpdate, setPanelVisibility]);
 
   useEffect(() => {
     const open = () => {
@@ -175,6 +174,7 @@ export function App({
       closeTransient() {
         if (!optionsOpenRef.current) return false;
         setOptionsVisibility(false);
+        focusInputWithoutSelection();
         return true;
       },
       destroy() {
@@ -185,7 +185,7 @@ export function App({
       },
     };
     onReady(handle);
-  }, [activeId, close, deferHighlightUpdate, focusInput, onReady, setOptionsVisibility, setPanelVisibility]);
+  }, [activeId, close, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onReady, setOptionsVisibility, setPanelVisibility]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -418,7 +418,7 @@ export function App({
 
   return (
     <section
-      ref={setPanelRef}
+      ref={panelRef}
       className="findinpage-panel"
       role="search"
       aria-label="Find in Page page search"
@@ -427,75 +427,86 @@ export function App({
       inert={isOpen ? undefined : true}
     >
       <div className="findinpage-toolbar">
-        <Input
-          ref={inputRef}
-          type="search"
-          variant="bare"
-          role="combobox"
-          aria-label="Search this page"
-          aria-autocomplete="none"
-          aria-controls="findinpage-results"
-          aria-expanded={results.length > 0}
-          aria-activedescendant={activeOptionId}
-          aria-keyshortcuts="Enter ArrowUp ArrowDown"
-          aria-invalid={searchError ? true : undefined}
-          aria-describedby={searchError ? 'findinpage-search-error' : undefined}
-          placeholder="Find in Page"
-          autoComplete="off"
-          spellCheck={false}
-          value={query}
-          onKeyDown={handleSearchInputKeyDown}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {results.length > 0 && (
-          <span
-            className="findinpage-counter"
-            aria-hidden="true"
-          >
-            {currentResult}/{totalResults}
-          </span>
-        )}
+        <div className="findinpage-input-wrapper">
+          <Input
+            ref={inputRef}
+            type="search"
+            variant="bare"
+            role="combobox"
+            aria-label="Search this page"
+            aria-autocomplete="none"
+            aria-controls="findinpage-results"
+            aria-expanded={results.length > 0}
+            aria-activedescendant={activeOptionId}
+            aria-keyshortcuts="Enter ArrowUp ArrowDown"
+            aria-invalid={searchError ? true : undefined}
+            aria-describedby={searchError ? 'findinpage-search-error' : undefined}
+            placeholder="Find in Page"
+            autoComplete="off"
+            spellCheck={false}
+            value={query}
+            onKeyDown={handleSearchInputKeyDown}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {results.length > 0 && (
+            <span
+              className="findinpage-counter"
+              aria-hidden="true"
+            >
+              {currentResult}/{totalResults}
+            </span>
+          )}
+          <Popover open={optionsOpen} onOpenChange={handleOptionsOpenChange}>
+            <PopoverTrigger
+              className={cn(
+                'findinpage-options-trigger',
+                hasActiveSearchOptions && 'findinpage-options-trigger--active',
+              )}
+              aria-label="Search options"
+              title="Search options"
+            >
+              <span aria-hidden="true">Aa</span>
+            </PopoverTrigger>
+            <PopoverContent
+              container={panelRef}
+              align="end"
+              side="bottom"
+              sideOffset={8}
+              aria-label="Search options"
+            >
+              <PopoverTitle className="sr-only">Search options</PopoverTitle>
+              <div className="findinpage-options-list">
+                {([
+                  ['caseSensitive', 'Match case', <CaseSensitive data-icon="inline-start" aria-hidden="true" />],
+                  ['wholeWord', 'Match whole word', <WholeWord data-icon="inline-start" aria-hidden="true" />],
+                  [
+                    'useRegularExpression',
+                    'Use regular expression',
+                    <Asterisk data-icon="inline-start" aria-hidden="true" />,
+                  ],
+                ] as const).map(([name, label, icon]) => (
+                  <Toggle
+                    key={name}
+                    className="findinpage-options-toggle"
+                    aria-label={label}
+                    pressed={searchOptions[name]}
+                    onPressedChange={(pressed) => updateSearchOption(name, pressed)}
+                  >
+                    {icon}
+                    <span>{label}</span>
+                    <span className="findinpage-options-selection" aria-hidden="true">
+                      <Check />
+                    </span>
+                  </Toggle>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
         <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {searchStatus}
         </span>
         <span className="findinpage-divider" aria-hidden="true" />
-        <Popover open={optionsOpen} onOpenChange={setOptionsVisibility}>
-          <PopoverTrigger
-            className={cn(
-              buttonVariants({ variant: 'ghost', size: 'panelIcon' }),
-              hasActiveSearchOptions && 'findinpage-options-trigger--active',
-            )}
-            aria-label="Search options"
-            title="Search options"
-          >
-            <SlidersHorizontal data-icon="inline-start" aria-hidden="true" />
-          </PopoverTrigger>
-          <PopoverContent
-            container={portalContainer}
-            align="end"
-            side="bottom"
-            sideOffset={8}
-            aria-label="Search options"
-          >
-            <PopoverTitle className="sr-only">Search options</PopoverTitle>
-            <div className="findinpage-options-list">
-              {([
-                ['caseSensitive', 'Match case'],
-                ['wholeWord', 'Match whole word'],
-                ['useRegularExpression', 'Use regular expression'],
-              ] as const).map(([name, label]) => (
-                <label className="findinpage-options-item" key={name}>
-                  <Checkbox
-                    aria-label={label}
-                    checked={searchOptions[name]}
-                    onCheckedChange={(checked) => updateSearchOption(name, checked)}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
         <Button
           variant="ghost"
           size="panelIcon"

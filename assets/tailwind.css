@@ -52,6 +52,7 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: #1a73e8;
+  --findinpage-option-accent: #1a73e8;
   --match: #ffff05;
   --match-active: #ff9632;
   --match-foreground: #000000;
@@ -72,12 +73,12 @@
   --findinpage-focus-background: var(--card);
   --findinpage-toolbar-height: 52px;
   --findinpage-toolbar-padding: 14px;
-  --findinpage-toolbar-gap: 6px;
+  --findinpage-toolbar-gap: 3px;
   --findinpage-input-height: 38px;
   --findinpage-input-font-size: 15px;
   --findinpage-counter-width: 36px;
   --findinpage-counter-font-size: 12px;
-  --findinpage-divider-height: 18px;
+  --findinpage-divider-height: 26px;
   --findinpage-control-size: 36px;
   --findinpage-control-icon-size: 18px;
   --findinpage-options-width: 224px;
@@ -132,6 +133,7 @@
   --border: hsl(0 0% 40% / 20%);
   --input: hsl(0 0% 40.9% / 30%);
   --ring: hsl(0 0% 54.9%);
+  --findinpage-option-accent: #6ea8fe;
   --findinpage-floating-shadow:
     0 0 0 1px rgb(255 255 255 / 6%),
     0 5px 14px rgb(0 0 0 / 42%),
@@ -161,7 +163,7 @@
     max-height: var(--findinpage-panel-max-height);
     flex-direction: column;
     gap: 0;
-    overflow: hidden;
+    overflow: visible;
     border: var(--findinpage-panel-border-width) solid var(--border);
     border-radius: var(--findinpage-surface-radius);
     background: var(--card);
@@ -210,12 +212,21 @@
 }
 
 .findinpage-input {
+    flex: 1;
     height: var(--findinpage-input-height);
     border: 0;
     background: transparent;
     padding: 0;
     font-size: var(--findinpage-input-font-size);
     font-weight: 500;
+}
+
+.findinpage-input-wrapper {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 4px;
 }
 
 .findinpage-counter {
@@ -245,8 +256,35 @@
     stroke-width: 2.25;
 }
 
+.findinpage-options-trigger {
+    position: relative;
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--radius-4xl);
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    outline: none;
+}
+
+.findinpage-options-trigger:hover,
+.findinpage-options-trigger[data-popup-open] {
+    background: var(--muted);
+    color: var(--foreground);
+}
+
+.findinpage-options-trigger:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
 .findinpage-options-trigger--active {
-    border-color: var(--ring);
     background: var(--muted);
     color: var(--foreground);
 }
@@ -269,61 +307,74 @@
 .findinpage-options-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
-.findinpage-options-item {
+.findinpage-options-toggle {
     display: flex;
-    min-height: 40px;
+    min-height: 34px;
+    width: 100%;
     cursor: pointer;
     align-items: center;
-    gap: 10px;
-    padding-inline: 10px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-inline: 8px;
+    border: 0;
     border-radius: var(--radius-sm);
+    background: transparent;
     color: var(--foreground);
     font-size: 13px;
     font-weight: 500;
+    text-align: left;
     user-select: none;
 }
 
-.findinpage-options-item:hover {
+.findinpage-options-toggle:hover {
     background: var(--muted);
 }
 
-.findinpage-options-checkbox {
-    position: relative;
-    display: flex;
+.findinpage-options-toggle > [data-icon="inline-start"] {
     width: 16px;
     height: 16px;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--input);
-    border-radius: 4px;
-    background: var(--background);
-    color: var(--primary-foreground);
-    outline: none;
+    color: var(--muted-foreground);
+    stroke-width: 2;
 }
 
-.findinpage-options-checkbox[data-checked] {
-    border-color: var(--primary);
-    background: var(--primary);
+.findinpage-options-toggle[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--findinpage-option-accent) 10%, var(--card));
+    color: var(--foreground);
 }
 
-.findinpage-options-checkbox:focus-visible {
-    border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
+.findinpage-options-toggle[aria-pressed="true"] > [data-icon="inline-start"] {
+    color: var(--findinpage-option-accent);
 }
 
-.findinpage-options-checkbox-indicator {
+.findinpage-options-selection {
     display: grid;
+    width: 16px;
+    height: 16px;
+    margin-left: auto;
+    flex-shrink: 0;
     place-content: center;
+    border: 1px solid var(--input);
+    border-radius: 50%;
+    color: transparent;
 }
 
-.findinpage-options-checkbox-indicator svg {
-    width: 12px;
-    height: 12px;
+.findinpage-options-selection svg {
+    width: 10px;
+    height: 10px;
     stroke-width: 3;
+}
+
+.findinpage-options-toggle[aria-pressed="true"] .findinpage-options-selection {
+    border-color: var(--findinpage-option-accent);
+    background: var(--findinpage-option-accent);
+    color: white;
+}
+
+.findinpage-options-toggle:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
 }
 
 .findinpage-search-error {
@@ -482,6 +533,12 @@
 @media (hover: hover) {
   .findinpage-result:hover {
     background: var(--muted);
+  }
+}
+
+@media (max-width: 340px) {
+  .findinpage-counter {
+    display: none;
   }
 }
 

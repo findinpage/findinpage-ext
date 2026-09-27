@@ -35,18 +35,6 @@ const extensionSearchOptionsStore: SearchOptionsStore = {
       // Search remains usable with in-memory preferences when storage is unavailable.
     }
   },
-  subscribe(listener) {
-    const onChanged = (
-      changes: Record<string, Browser.storage.StorageChange>,
-      areaName: string,
-    ) => {
-      if (areaName !== 'local') return;
-      const changed = changes[SEARCH_OPTIONS_STORAGE_KEY];
-      if (changed) listener(normalizeSearchOptions(changed.newValue));
-    };
-    browser.storage.onChanged.addListener(onChanged);
-    return () => browser.storage.onChanged.removeListener(onChanged);
-  },
 };
 
 export default defineContentScript({
