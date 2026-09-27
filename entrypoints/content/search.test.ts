@@ -35,12 +35,16 @@ describe('PageSearch', () => {
   let pageSearch: PageSearch;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     document.body.innerHTML = '';
     pageSearch = new PageSearch();
     installNativeHighlights();
   });
 
-  afterEach(() => pageSearch.clear());
+  afterEach(() => {
+    pageSearch.clear();
+    vi.restoreAllMocks();
+  });
 
   it('matches across inline text nodes but not across blocks or br elements', async () => {
     document.body.innerHTML = `
@@ -122,6 +126,57 @@ describe('PageSearch', () => {
     expect(registry.has(ALL_HIGHLIGHTS_NAME)).toBe(false);
     pageSearch.restoreHighlights(response.results[1].id);
     expect(registry.has(ACTIVE_HIGHLIGHT_NAME)).toBe(true);
+  });
+
+  it('does not horizontally center a match that is already visible in the viewport', async () => {
+    document.body.innerHTML = '<p>needle</p>';
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 300, right: 340, top: 700, bottom: 716, width: 40, height: 16,
+      x: 300, y: 700, toJSON: () => ({}),
+    });
+    const { response } = await search(pageSearch, 'needle');
+
+    pageSearch.select(response.results[0].id);
+
+    expect(window.scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: 0 }));
+  });
+
+  it('uses the nearest viewport edge when a match is horizontally out of view', async () => {
+    document.body.innerHTML = '<p>needle</p>';
+    const left = window.innerWidth + 100;
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue({
+      left, right: left + 40, top: 700, bottom: 716, width: 40, height: 16,
+      x: left, y: 700, toJSON: () => ({}),
+    });
+    const { response } = await search(pageSearch, 'needle');
+
+    pageSearch.select(response.results[0].id);
+
+    expect(window.scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: 140 }));
+  });
+
+  it('does not horizontally center a visible match inside a scrollable ancestor', async () => {
+    document.body.innerHTML = '<div><p>needle</p></div>';
+    const scroller = document.querySelector('div')!;
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 200 },
+      clientWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 600 },
+      scrollWidth: { configurable: true, value: 800 },
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue({
+      left: 100, right: 500, top: 100, bottom: 300, width: 400, height: 200,
+      x: 100, y: 100, toJSON: () => ({}),
+    });
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 220, right: 260, top: 160, bottom: 176, width: 40, height: 16,
+      x: 220, y: 160, toJSON: () => ({}),
+    });
+    const { response } = await search(pageSearch, 'needle');
+
+    pageSearch.select(response.results[0].id);
+
+    expect(scroller.scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: 0 }));
   });
 
   it('falls back to spans and restores the original text on clear', async () => {

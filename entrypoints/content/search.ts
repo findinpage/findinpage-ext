@@ -168,6 +168,21 @@ function hasWholeWordBoundaries(value: string, start: number, end: number): bool
     (!after || !WORD_CHARACTER_PATTERN.test(after));
 }
 
+function getNearestInlineScrollDelta(
+  targetStart: number,
+  targetEnd: number,
+  viewportStart: number,
+  viewportEnd: number,
+): number {
+  if (targetStart < viewportStart && targetEnd <= viewportEnd) {
+    return targetStart - viewportStart;
+  }
+  if (targetEnd > viewportEnd && targetStart >= viewportStart) {
+    return targetEnd - viewportEnd;
+  }
+  return 0;
+}
+
 function isSupportedControl(element: Element): element is TextControl {
   if (element.localName === 'textarea') return true;
   if (element.localName !== 'input') return false;
@@ -809,14 +824,19 @@ export class PageSearch {
     while (ancestor && ancestor !== location.document.body) {
       if (ancestor.scrollHeight > ancestor.clientHeight || ancestor.scrollWidth > ancestor.clientWidth) {
         const rangeRect = targetRange.getBoundingClientRect(); const ancestorRect = ancestor.getBoundingClientRect();
-        ancestor.scrollBy({ behavior: 'instant', left: rangeRect.left - ancestorRect.left - (ancestor.clientWidth - rangeRect.width) / 2,
+        const inlineStart = ancestorRect.left + ancestor.clientLeft;
+        ancestor.scrollBy({ behavior: 'instant', left: getNearestInlineScrollDelta(
+          rangeRect.left, rangeRect.right, inlineStart, inlineStart + ancestor.clientWidth,
+        ),
           top: rangeRect.top - ancestorRect.top - (ancestor.clientHeight - rangeRect.height) / 2 });
       }
       ancestor = ancestor.parentElement;
     }
     const rect = targetRange.getBoundingClientRect(); const viewport = ownerWindow.visualViewport;
+    const viewportLeft = viewport?.offsetLeft ?? 0;
+    const viewportWidth = viewport?.width ?? ownerWindow.innerWidth;
     ownerWindow.scrollBy({ behavior: 'instant',
-      left: rect.left - (viewport?.offsetLeft ?? 0) - ((viewport?.width ?? ownerWindow.innerWidth) - rect.width) / 2,
+      left: getNearestInlineScrollDelta(rect.left, rect.right, viewportLeft, viewportLeft + viewportWidth),
       top: rect.top - (viewport?.offsetTop ?? 0) - ((viewport?.height ?? ownerWindow.innerHeight) - rect.height) / 2 });
   }
 
