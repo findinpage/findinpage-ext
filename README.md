@@ -24,6 +24,12 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 - **Clear page highlights:** all matches are highlighted on the page, with the
   active match shown in a distinct style. Highlights disappear when the panel
   closes.
+- **Form-field search:** visible text, search, email, telephone, and URL inputs,
+  plus textareas, are searched without replacing the original controls. A
+  synchronized mirror shows every match inside each control.
+- **Responsive large-page search:** results are collected in cancellable batches
+  so there is no fixed result limit and large pages remain responsive while the
+  result list fills.
 - **Live page updates:** while the panel is open, results refresh when page
   content changes or scrolling reveals newly rendered content. Find in Page keeps
   the active result and result-list position when it can still identify them.
@@ -49,8 +55,14 @@ Find in Page searches the top-level Light DOM, accessible open
 Shadow DOM, and same-origin iframes, and shows every match, including context
 drawn from the nearest paragraph, list item, table cell, heading, blockquote, or
 preformatted block when available.
-Visible textarea values are included and selecting one of those results scrolls
-to the control and selects the matching text.
+Visible textarea values and editable `text`, `search`, `email`, `tel`, and `url`
+input values are included. Password and non-text controls are intentionally
+excluded. Selecting a form result scrolls both the page and the control to the
+matching value. Text within one block can match across inline elements, such as
+`hello <strong>world</strong>`; matching does not cross blocks or `<br>` elements.
+CSS Custom Highlights are used when available. Documents without that API use a
+temporary DOM-span compatibility mode that is removed when the search is
+replaced or the extension is destroyed.
 
 ## Development
 
@@ -80,6 +92,7 @@ Useful checks:
 ```bash
 pnpm compile
 pnpm build
+pnpm test
 ```
 
 ### UI components
@@ -97,8 +110,10 @@ The configuration is stored in `components.json`, and shared theme tokens live i
 Find in Page searches visible text nodes currently present in the top-level DOM,
 open Shadow DOM, and same-origin iframes of ordinary HTTP and HTTPS pages. It
 supports literal, case-sensitive, Unicode whole-word, and regular-expression
-queries and does not limit the number of results. Matching stays within each
-individual text node or textarea value and does not join adjacent DOM nodes.
+queries and does not limit the number of results. Search runs in cancellable
+batches and reports results incrementally. Matching may span adjacent text nodes
+inside one visible block, but does not cross block or explicit line-break
+boundaries.
 
 The MVP does not search:
 

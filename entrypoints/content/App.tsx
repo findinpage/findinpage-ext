@@ -17,6 +17,7 @@ import {
   getAccessibleDocuments,
   getOpenShadowRoots,
   PageSearch,
+  type HighlightMode,
   type SearchError,
   type SearchOptions,
   type SearchResultView,
@@ -53,6 +54,8 @@ export function App({
   const [query, setQuery] = useState(initialQuery);
   const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
   const [searchError, setSearchError] = useState<SearchError>();
+  const [isSearching, setIsSearching] = useState(false);
+  const [highlightMode, setHighlightMode] = useState<HighlightMode>('native');
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [results, setResults] = useState<SearchResultView[]>([]);
   const [activeId, setActiveId] = useState<string>();
@@ -68,6 +71,7 @@ export function App({
   const skipNextResultListScrollRef = useRef(false);
   const suppressPageScrollRefreshUntilRef = useRef(0);
   const highlightFrameRef = useRef<number | undefined>(undefined);
+  const searchTaskIdRef = useRef<number | undefined>(undefined);
   const resultVirtualizer = useVirtualizer({
     count: results.length,
     getScrollElement: () => resultsRef.current,
@@ -137,6 +141,10 @@ export function App({
     optionsOpenRef.current = false;
     setOptionsOpen(false);
     // WebKit repaints mutated highlights more reliably while their host UI is visible.
+    searchRef.current.cancelSearch();
+    searchTaskIdRef.current = undefined;
+    setIsSearching(false);
+    lastSearchSignatureRef.current = undefined;
     searchRef.current.hideHighlights();
     setPanelVisibility(false);
     setIsOpen(false);
@@ -202,25 +210,41 @@ export function App({
         pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
       }
 
-      const response = searchRef.current.search(query, searchOptions);
       lastSearchSignatureRef.current = JSON.stringify([query, searchOptions]);
-      setSearchError(response.error);
-      setResults(response.results);
+      setIsSearching(query.length > 0);
+      let selectedInitialResult = false;
+      let selectedResultId: string | undefined;
+      let taskId: number | undefined;
+      const task = searchRef.current.search(query, searchOptions, (response) => {
+        if (taskId !== undefined && searchTaskIdRef.current !== taskId) return;
+        setSearchError(response.error);
+        setResults(response.results);
+        setHighlightMode(response.highlightMode);
+        setIsSearching(!response.complete);
 
-      const resolvedId = selectionAnchor
-        ? searchRef.current.resolveSelection(selectionAnchor)
-        : undefined;
-      const nextResult = preservePosition
-        ? response.results.find((result) => result.id === resolvedId)
-        : response.results[0];
-      if (!preservePosition) {
-        suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
-      }
-      setActiveId(
-        nextResult && searchRef.current.select(nextResult.id, { scroll: !preservePosition })
-          ? nextResult.id
-          : undefined,
-      );
+        const resolvedId = selectionAnchor
+          ? searchRef.current.resolveSelection(selectionAnchor)
+          : undefined;
+        const nextResult = preservePosition
+          ? response.results.find((result) => result.id === resolvedId)
+          : response.results[0];
+        if (!selectedInitialResult && nextResult) {
+          selectedInitialResult = true;
+          selectedResultId = nextResult.id;
+          if (!preservePosition) suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
+          setActiveId(
+            searchRef.current.select(nextResult.id, { scroll: !preservePosition })
+              ? nextResult.id
+              : undefined,
+          );
+        } else if (response.complete && response.results.length === 0) {
+          setActiveId(undefined);
+        } else if (response.complete && selectedResultId) {
+          searchRef.current.select(selectedResultId, { scroll: false });
+        }
+      });
+      taskId = task.id;
+      searchTaskIdRef.current = task.id;
     },
     [activeId, query, searchOptions],
   );
@@ -253,7 +277,18 @@ export function App({
       if (!observer) {
         const MutationObserverForDocument = ownerDocument.defaultView?.MutationObserver;
         if (!MutationObserverForDocument) return;
-        observer = new MutationObserverForDocument(scheduleRefresh);
+        observer = new MutationObserverForDocument((records) => {
+          const isOwnNode = (node: Node) => {
+            if (node.nodeType !== 1) return false;
+            const element = node as Element;
+            return element.hasAttribute('data-findinpage-fallback') ||
+              element.hasAttribute('data-findinpage-control-mirror');
+          };
+          if (records.every((record) =>
+            [...record.addedNodes, ...record.removedNodes].some(isOwnNode)
+          )) return;
+          scheduleRefresh();
+        });
         observers.set(ownerDocument, observer);
       }
       try {
@@ -271,6 +306,8 @@ export function App({
         if (!observedDocuments.has(ownerDocument)) {
           observedDocuments.add(ownerDocument);
           ownerDocument.addEventListener('load', scheduleRefresh, true);
+          ownerDocument.addEventListener('input', handleControlValueChange, true);
+          ownerDocument.addEventListener('change', handleControlValueChange, true);
           ownerDocument.defaultView?.addEventListener('scroll', handlePageScroll, {
             capture: true,
             passive: true,
@@ -292,6 +329,13 @@ export function App({
       if (performance.now() < suppressPageScrollRefreshUntilRef.current) return;
       scheduleRefresh();
     };
+    const handleControlValueChange = (event: Event) => {
+      const target = event.target;
+      if (!target || typeof target !== 'object' || !('matches' in target)) return;
+      if ((target as Element).matches('textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"]')) {
+        scheduleRefresh();
+      }
+    };
 
     observeAccessibleDocuments();
 
@@ -299,6 +343,8 @@ export function App({
       for (const observer of observers.values()) observer.disconnect();
       for (const ownerDocument of observedDocuments) {
         ownerDocument.removeEventListener('load', scheduleRefresh, true);
+        ownerDocument.removeEventListener('input', handleControlValueChange, true);
+        ownerDocument.removeEventListener('change', handleControlValueChange, true);
         ownerDocument.defaultView?.removeEventListener('scroll', handlePageScroll, {
           capture: true,
         });
@@ -316,15 +362,7 @@ export function App({
       return;
     }
 
-    const refreshed = searchRef.current.search(query, searchOptions);
-    setSearchError(refreshed.error);
-    setResults(refreshed.results);
-    const firstResult = refreshed.results[0];
-    setActiveId(
-      firstResult && searchRef.current.select(firstResult.id, { scroll: false })
-        ? firstResult.id
-        : undefined,
-    );
+    runSearch(false);
   };
 
   const navigateResult = (direction: -1 | 1) => {
@@ -390,7 +428,7 @@ export function App({
     ? 'Enter a search term.'
     : results.length === 0
       ? 'No matches on this page.'
-      : `${results.length} ${results.length === 1 ? 'match' : 'matches'}. Result ${currentResult} selected.`;
+      : `${isSearching ? 'Searching. ' : ''}${results.length} ${results.length === 1 ? 'match' : 'matches'}. Result ${currentResult} selected.${highlightMode === 'native' ? '' : ' Compatibility highlighting is active.'}`;
 
   const handleSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
@@ -567,7 +605,9 @@ export function App({
 
         {hasQuery && !searchError && results.length === 0 && (
           <div className="findinpage-empty findinpage-empty--compact">
-            <p className="findinpage-empty-copy">No matches on this page.</p>
+            <p className="findinpage-empty-copy">
+              {isSearching ? 'Searching this page...' : 'No matches on this page.'}
+            </p>
           </div>
         )}
 
@@ -625,6 +665,14 @@ export function App({
           </div>
         )}
       </div>
+
+      {(isSearching || highlightMode !== 'native') && (
+        <p className="findinpage-search-note" role="status">
+          {isSearching
+            ? `Searching... ${results.length} ${results.length === 1 ? 'match' : 'matches'} found`
+            : 'Compatibility highlighting is active on this page.'}
+        </p>
+      )}
 
       {installAction && (
         <div className="findinpage-install">
