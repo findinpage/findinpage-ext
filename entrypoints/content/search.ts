@@ -85,26 +85,6 @@ function createResultSignature(view: Pick<SearchResultView, 'before' | 'match' |
   return `${view.before}\u0000${view.match}\u0000${view.after}`;
 }
 
-function isRangeInViewport(range: Range): boolean {
-  const rect = range.getBoundingClientRect();
-  const ownerWindow = range.startContainer.ownerDocument?.defaultView;
-  if (!ownerWindow) return false;
-  const viewport = ownerWindow.visualViewport;
-  const viewportLeft = viewport?.offsetLeft ?? 0;
-  const viewportTop = viewport?.offsetTop ?? 0;
-  const viewportRight = viewportLeft + (viewport?.width ?? ownerWindow.innerWidth);
-  const viewportBottom = viewportTop + (viewport?.height ?? ownerWindow.innerHeight);
-
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.left >= viewportLeft &&
-    rect.right <= viewportRight &&
-    rect.top >= viewportTop &&
-    rect.bottom <= viewportBottom
-  );
-}
-
 function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): boolean {
   const parent = node.parentElement;
   if (!parent || !node.nodeValue || parent.closest(EXCLUDED_SELECTOR)) {
@@ -451,11 +431,7 @@ export class PageSearch {
       location.control.setSelectionRange(location.matchStart, location.matchEnd);
     }
     if (options.scroll !== false) {
-      location.scrollTarget.scrollIntoView({
-        behavior: 'auto',
-        block: 'center',
-        inline: 'nearest',
-      });
+      this.scrollLocationIntoView(location);
       this.scrollFrameIntoView(location.document);
     }
     return true;
@@ -520,12 +496,55 @@ export class PageSearch {
     this.frameHighlightStyles.set(ownerDocument, style);
   }
 
+  private scrollLocationIntoView(location: MatchLocation): void {
+    if (!location.range) {
+      location.scrollTarget.scrollIntoView({
+        behavior: 'instant',
+        block: 'center',
+        inline: 'nearest',
+      });
+      return;
+    }
+
+    const ownerWindow = location.document.defaultView;
+    if (!ownerWindow) return;
+
+    let ancestor = location.range.startContainer.parentElement;
+    while (ancestor && ancestor !== location.document.body) {
+      if (
+        ancestor.scrollHeight > ancestor.clientHeight ||
+        ancestor.scrollWidth > ancestor.clientWidth
+      ) {
+        const rangeRect = location.range.getBoundingClientRect();
+        const ancestorRect = ancestor.getBoundingClientRect();
+        ancestor.scrollBy({
+          behavior: 'instant',
+          left: rangeRect.left - ancestorRect.left - (ancestor.clientWidth - rangeRect.width) / 2,
+          top: rangeRect.top - ancestorRect.top - (ancestor.clientHeight - rangeRect.height) / 2,
+        });
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    const rect = location.range.getBoundingClientRect();
+    const viewport = ownerWindow.visualViewport;
+    const viewportLeft = viewport?.offsetLeft ?? 0;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const viewportWidth = viewport?.width ?? ownerWindow.innerWidth;
+    const viewportHeight = viewport?.height ?? ownerWindow.innerHeight;
+    ownerWindow.scrollBy({
+      behavior: 'instant',
+      left: rect.left - viewportLeft - (viewportWidth - rect.width) / 2,
+      top: rect.top - viewportTop - (viewportHeight - rect.height) / 2,
+    });
+  }
+
   private scrollFrameIntoView(ownerDocument: Document): void {
     let currentDocument: Document | null = ownerDocument;
     while (currentDocument && currentDocument !== document) {
       const frame: Element | null = currentDocument.defaultView?.frameElement ?? null;
       if (!frame || frame.nodeType !== Node.ELEMENT_NODE) break;
-      frame.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+      frame.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
       currentDocument = frame.ownerDocument;
     }
   }
