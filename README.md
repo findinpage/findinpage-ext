@@ -6,6 +6,7 @@ context. It keeps the familiar `Command+F` / `Ctrl+F` shortcut while making it
 easier to scan a page and jump directly to the result you need.
 
 - Website: [findin.page](https://findin.page)
+- Chrome Web Store: [Install Find in Page](https://chromewebstore.google.com/detail/ghgneafbinoihjfpmcdglhmoieekmnji)
 - Source: [github.com/findinpage/findinpage-ext](https://github.com/findinpage/findinpage-ext)
 - Support: [support@findin.page](mailto:support@findin.page)
 
