@@ -1,5 +1,7 @@
 export const ACTIVE_HIGHLIGHT_NAME = 'findinpage-active-match';
 export const ALL_HIGHLIGHTS_NAME = 'findinpage-all-matches';
+export const CLOSED_ACTIVE_HIGHLIGHT_NAME = 'findinpage-closed-active-match';
+export const CLOSED_ALL_HIGHLIGHTS_NAME = 'findinpage-closed-all-matches';
 
 const EXCLUDED_SELECTOR = [
   'script', 'style', 'noscript', 'template', 'textarea', 'input', 'select',
@@ -102,7 +104,7 @@ interface MatchLocation {
   fallbackSpans?: HTMLElement[];
 }
 
-interface SelectionAnchor {
+export interface SelectionAnchor {
   startContainer: Node;
   startOffset: number;
   scrollTarget: Element;
@@ -266,7 +268,18 @@ function hasBreakBetween(previous: Text, current: Text, container: Element): boo
   return !container.contains(current);
 }
 
-function* walkComposedNodes(node: Node, visited = new Set<Node>()): Generator<Node> {
+export interface PageSearchScope {
+  getRoots(): Node[];
+  getShadowRoot?(element: Element): ShadowRoot | null | undefined;
+  activeHighlightName?: string;
+  allHighlightsName?: string;
+}
+
+function* walkComposedNodes(
+  node: Node,
+  visited = new Set<Node>(),
+  getShadowRoot: (element: Element) => ShadowRoot | null | undefined = (element) => element.shadowRoot,
+): Generator<Node> {
   if (visited.has(node)) return;
   visited.add(node);
   if (node.nodeType === Node.TEXT_NODE) {
@@ -279,35 +292,42 @@ function* walkComposedNodes(node: Node, visited = new Set<Node>()): Generator<No
   if (element?.localName === 'slot') {
     const assigned = (element as HTMLSlotElement).assignedNodes({ flatten: true });
     if (assigned.length) {
-      for (const assignedNode of assigned) yield* walkComposedNodes(assignedNode, visited);
+      for (const assignedNode of assigned) yield* walkComposedNodes(assignedNode, visited, getShadowRoot);
       return;
     }
   }
   if (element?.localName === 'iframe') {
     try {
       const frameDocument = (element as HTMLIFrameElement).contentDocument;
-      if (frameDocument?.body) yield* walkComposedNodes(frameDocument.body, visited);
+      if (frameDocument?.body) yield* walkComposedNodes(frameDocument.body, visited, getShadowRoot);
     } catch {
       // Cross-origin frames are unavailable to content scripts.
     }
     return;
   }
-  if (element?.shadowRoot) {
-    yield* walkComposedNodes(element.shadowRoot, visited);
+  const shadowRoot = element ? getShadowRoot(element) : undefined;
+  if (shadowRoot) {
+    yield* walkComposedNodes(shadowRoot, visited, getShadowRoot);
     return;
   }
   if (element && isSupportedControl(element)) {
     yield element;
     return;
   }
-  for (const child of node.childNodes) yield* walkComposedNodes(child, visited);
+  for (const child of node.childNodes) yield* walkComposedNodes(child, visited, getShadowRoot);
 }
 
-function collectSearchSources(root: Node, visibilityCache: Map<Element, boolean>): SearchSource[] {
+function collectSearchSources(
+  roots: Node[],
+  visibilityCache: Map<Element, boolean>,
+  getShadowRoot?: PageSearchScope['getShadowRoot'],
+): SearchSource[] {
   const sources: SearchSource[] = [];
-  let flow: TextFlow | undefined;
-  let previousText: Text | undefined;
-  for (const node of walkComposedNodes(root)) {
+  const visited = new Set<Node>();
+  for (const root of roots) {
+    let flow: TextFlow | undefined;
+    let previousText: Text | undefined;
+    for (const node of walkComposedNodes(root, visited, getShadowRoot)) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const control = node as TextControl;
       if (isVisibleElement(control, visibilityCache)) {
@@ -330,6 +350,7 @@ function collectSearchSources(root: Node, visibilityCache: Map<Element, boolean>
     flow.text += textNode.nodeValue ?? '';
     flow.segments.push({ node: textNode, start, end: flow.text.length });
     previousText = textNode;
+    }
   }
   return sources;
 }
@@ -375,8 +396,10 @@ function createPageHighlightStyle(ownerDocument: Document): HTMLStyleElement {
   const style = ownerDocument.createElement('style');
   style.dataset.findinpageHighlight = 'true';
   style.textContent = `
-    ::highlight(${ALL_HIGHLIGHTS_NAME}) { background-color: #ffff05; color: #000000; }
-    ::highlight(${ACTIVE_HIGHLIGHT_NAME}) {
+    ::highlight(${ALL_HIGHLIGHTS_NAME}), ::highlight(${CLOSED_ALL_HIGHLIGHTS_NAME}) {
+      background-color: #ffff05; color: #000000;
+    }
+    ::highlight(${ACTIVE_HIGHLIGHT_NAME}), ::highlight(${CLOSED_ACTIVE_HIGHLIGHT_NAME}) {
       background-color: #ff9632; color: #000000; text-decoration: underline;
       text-decoration-color: #9a6700; text-decoration-thickness: 2px;
     }
@@ -435,6 +458,16 @@ export class PageSearch {
   private activeTask?: { id: number; cancelled: boolean };
   private highlightsVisible = true;
 
+  constructor(private readonly scope?: PageSearchScope) {}
+
+  private get activeHighlightName(): string {
+    return this.scope?.activeHighlightName ?? ACTIVE_HIGHLIGHT_NAME;
+  }
+
+  private get allHighlightsName(): string {
+    return this.scope?.allHighlightsName ?? ALL_HIGHLIGHTS_NAME;
+  }
+
   search(
     query: string,
     options: SearchOptions = DEFAULT_SEARCH_OPTIONS,
@@ -470,7 +503,8 @@ export class PageSearch {
         return empty;
       }
       const visibilityCache = new Map<Element, boolean>();
-      const sources = collectSearchSources(document.body, visibilityCache);
+      const roots = this.scope?.getRoots() ?? (document.body ? [document.body] : []);
+      const sources = collectSearchSources(roots, visibilityCache, this.scope?.getShadowRoot);
       for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
         if (taskState.cancelled) return this.response(results, startedAt, true);
         const source = sources[sourceIndex];
@@ -624,7 +658,7 @@ export class PageSearch {
     } else if (location.range) {
       const registry = getHighlightRegistry(location.document);
       const HighlightForDocument = getHighlightConstructor(location.document);
-      if (registry && HighlightForDocument) registry.set(ACTIVE_HIGHLIGHT_NAME, new HighlightForDocument(location.range));
+      if (registry && HighlightForDocument) registry.set(this.activeHighlightName, new HighlightForDocument(location.range));
     }
     if (options.scroll !== false) {
       this.scrollLocationIntoView(location);
@@ -645,8 +679,8 @@ export class PageSearch {
     this.highlightsVisible = false;
     for (const ownerDocument of this.highlightedDocuments) {
       const registry = getHighlightRegistry(ownerDocument);
-      registry?.delete(ACTIVE_HIGHLIGHT_NAME);
-      registry?.delete(ALL_HIGHLIGHTS_NAME);
+      registry?.delete(this.activeHighlightName);
+      registry?.delete(this.allHighlightsName);
     }
     this.highlightedDocuments.clear();
     for (const span of this.fallbackSpans) span.dataset.findinpageFallback = 'hidden';
@@ -693,8 +727,8 @@ export class PageSearch {
       const registry = getHighlightRegistry(ownerDocument)!;
       const HighlightForDocument = getHighlightConstructor(ownerDocument)!;
       if (ownerDocument !== document) this.ensureFrameHighlightStyles(ownerDocument);
-      registry.delete(ALL_HIGHLIGHTS_NAME);
-      registry.set(ALL_HIGHLIGHTS_NAME, new HighlightForDocument(...ranges));
+      registry.delete(this.allHighlightsName);
+      registry.set(this.allHighlightsName, new HighlightForDocument(...ranges));
       this.highlightedDocuments.add(ownerDocument);
     }
   }
@@ -844,7 +878,7 @@ export class PageSearch {
   }
 
   private clearActiveHighlight(): void {
-    for (const ownerDocument of this.highlightedDocuments) getHighlightRegistry(ownerDocument)?.delete(ACTIVE_HIGHLIGHT_NAME);
+    for (const ownerDocument of this.highlightedDocuments) getHighlightRegistry(ownerDocument)?.delete(this.activeHighlightName);
     for (const span of this.fallbackSpans) span.dataset.findinpageFallback = 'match';
     this.setMirrorActive('');
   }
@@ -852,8 +886,8 @@ export class PageSearch {
   private clearRenderedHighlights(): void {
     for (const ownerDocument of this.highlightedDocuments) {
       const registry = getHighlightRegistry(ownerDocument);
-      registry?.get(ACTIVE_HIGHLIGHT_NAME)?.clear(); registry?.get(ALL_HIGHLIGHTS_NAME)?.clear();
-      registry?.delete(ACTIVE_HIGHLIGHT_NAME); registry?.delete(ALL_HIGHLIGHTS_NAME);
+      registry?.get(this.activeHighlightName)?.clear(); registry?.get(this.allHighlightsName)?.clear();
+      registry?.delete(this.activeHighlightName); registry?.delete(this.allHighlightsName);
     }
     this.highlightedDocuments.clear();
     for (const mirror of this.mirrors.values()) mirror.cleanup();

@@ -25,8 +25,15 @@ import {
 } from './search';
 import type { SearchOptionsStore } from './search-options';
 
+type SearchController = Pick<PageSearch,
+  'search' | 'cancelSearch' | 'captureRangeSelection' | 'resolveRangeSelection' |
+  'select' | 'hideHighlights' | 'restoreHighlights' | 'clear'> & {
+    captureSelection(id: string): unknown;
+    resolveSelection(anchor: any): string | undefined;
+  };
+
 export interface FindInPageHandle {
-  openAndFocus(): void;
+  openAndFocus(query?: string, options?: Partial<SearchOptions>): void;
   navigate(direction: -1 | 1): void;
   search(selection: SearchSelectionRequest): void;
   toggle(): void;
@@ -51,6 +58,7 @@ interface AppProps {
   };
   searchOptionsStore?: SearchOptionsStore;
   locale?: SupportedLocale;
+  searchFactory?: () => SearchController;
 }
 
 export function App({
@@ -59,6 +67,7 @@ export function App({
   installAction,
   searchOptionsStore,
   locale = getBrowserLocale(),
+  searchFactory = () => new PageSearch(),
 }: AppProps) {
   const t = useCallback(
     (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) =>
@@ -79,7 +88,7 @@ export function App({
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef(new PageSearch());
+  const searchRef = useRef(searchFactory());
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const lastSearchSignatureRef = useRef<string | undefined>(undefined);
   const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
@@ -172,7 +181,19 @@ export function App({
   }, [deferHighlightUpdate, setPanelVisibility]);
 
   useEffect(() => {
-    const open = (restoreHighlights = true) => {
+    const open = (
+      queryOverride?: string | boolean,
+      optionsOverride?: Partial<SearchOptions>,
+    ) => {
+      const restoreHighlights = typeof queryOverride === 'boolean' ? queryOverride : true;
+      if (typeof queryOverride === 'string') {
+        setQuery(queryOverride);
+        lastSearchSignatureRef.current = undefined;
+      }
+      if (optionsOverride) {
+        setSearchOptions({ ...DEFAULT_SEARCH_OPTIONS, ...optionsOverride });
+        lastSearchSignatureRef.current = undefined;
+      }
       if (!isOpenRef.current) {
         isOpenRef.current = true;
         restoreFocusRef.current =
@@ -189,7 +210,7 @@ export function App({
     };
 
     const handle: FindInPageHandle = {
-      openAndFocus: open,
+      openAndFocus: (queryOverride, optionsOverride) => open(queryOverride, optionsOverride),
       navigate(direction) {
         navigateShortcutRef.current(direction);
       },

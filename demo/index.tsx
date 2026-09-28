@@ -43,7 +43,7 @@ export interface FindInPageDemoTestApi {
 }
 
 export interface FindInPageDemoHandle {
-  open(): void;
+  open(query?: string): void;
   navigate(direction: -1 | 1): void;
   search(selection: SearchSelectionRequest): void;
   close(): void;
@@ -141,6 +141,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
 
   let appHandle: FindInPageHandle | undefined;
   let openWhenReady = false;
+  let openQueryWhenReady: string | undefined;
   let navigateWhenReady: -1 | 1 | undefined;
   let destroyed = false;
   const testSearch = options.testMode ? new PageSearch() : undefined;
@@ -182,7 +183,9 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
             handle.navigate(direction);
           } else if (openWhenReady) {
             openWhenReady = false;
-            handle.openAndFocus();
+            const query = openQueryWhenReady;
+            openQueryWhenReady = undefined;
+            handle.openAndFocus(query);
           }
         }}
       />
@@ -196,6 +199,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
       testSearch.clear();
     },
     async search(query, searchOptions = {}) {
+      appHandle?.openAndFocus(query, searchOptions);
       const response = await testSearch.search(query, {
         ...DEFAULT_SEARCH_OPTIONS,
         ...searchOptions,
@@ -219,10 +223,13 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
   } : undefined;
 
   const handle: FindInPageDemoHandle = {
-    open() {
+    open(query) {
       if (destroyed) return;
-      if (appHandle) appHandle.openAndFocus();
-      else openWhenReady = true;
+      if (appHandle) appHandle.openAndFocus(query);
+      else {
+        openWhenReady = true;
+        openQueryWhenReady = query;
+      }
     },
     navigate(direction) {
       if (destroyed) return;

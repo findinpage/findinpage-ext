@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { App, type FindInPageHandle } from './App';
+import { CombinedPageSearch } from './combined-search';
 import {
   normalizeSearchOptions,
   SEARCH_OPTIONS_STORAGE_KEY,
@@ -273,6 +274,7 @@ export default defineContentScript({
         root.render(
           <React.StrictMode>
             <LocalizedApp
+              searchFactory={() => new CombinedPageSearch()}
               searchOptionsStore={extensionSearchOptionsStore}
         onReady={(handle) => {
           appHandle = handle;

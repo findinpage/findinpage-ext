@@ -57,6 +57,46 @@ describe('PageSearch', () => {
     expect(response.results[0].match).toBe('hello world');
   });
 
+  it('searches a retained closed shadow root without changing its closed semantics', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const closedRoot = host.attachShadow({ mode: 'closed' });
+    closedRoot.innerHTML = '<p>closed needle</p>';
+    expect(host.shadowRoot).toBeNull();
+
+    const closedSearch = new PageSearch({ getRoots: () => [closedRoot] });
+    const { response } = await search(closedSearch, 'needle');
+
+    expect(response.results).toHaveLength(1);
+    expect(response.results[0].match).toBe('needle');
+    expect(host.shadowRoot).toBeNull();
+    closedSearch.clear();
+  });
+
+  it('searches nested open and closed roots below a retained closed root without duplicates', async () => {
+    const roots = new WeakMap<Element, ShadowRoot>();
+    const host = document.createElement('div');
+    document.body.append(host);
+    const outer = host.attachShadow({ mode: 'closed' });
+    roots.set(host, outer);
+    outer.innerHTML = '<p>needle outer</p><div id="open-host"></div><div id="closed-host"></div>';
+    const openHost = outer.querySelector('#open-host')!;
+    openHost.attachShadow({ mode: 'open' }).innerHTML = '<p>needle open nested</p>';
+    const closedHost = outer.querySelector('#closed-host')!;
+    const innerClosed = closedHost.attachShadow({ mode: 'closed' });
+    roots.set(closedHost, innerClosed);
+    innerClosed.innerHTML = '<p>needle closed nested</p>';
+
+    const closedSearch = new PageSearch({
+      getRoots: () => [outer, innerClosed],
+      getShadowRoot: (element) => element.shadowRoot ?? roots.get(element),
+    });
+    const { response } = await search(closedSearch, 'needle');
+
+    expect(response.results).toHaveLength(3);
+    closedSearch.clear();
+  });
+
   it('searches supported inputs and textarea while excluding sensitive and non-text controls', async () => {
     document.body.innerHTML = `
       <input value="needle default">
