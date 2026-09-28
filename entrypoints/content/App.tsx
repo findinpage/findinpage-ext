@@ -16,7 +16,7 @@ import {
   DEFAULT_SEARCH_OPTIONS,
   installPageHighlightStyles,
   getAccessibleDocuments,
-  getOpenShadowRoots,
+  getSearchableShadowRoots,
   PageSearch,
   type HighlightMode,
   type SearchError,
@@ -24,13 +24,6 @@ import {
   type SearchResultView,
 } from './search';
 import type { SearchOptionsStore } from './search-options';
-
-type SearchController = Pick<PageSearch,
-  'search' | 'cancelSearch' | 'captureRangeSelection' | 'resolveRangeSelection' |
-  'select' | 'hideHighlights' | 'restoreHighlights' | 'clear'> & {
-    captureSelection(id: string): unknown;
-    resolveSelection(anchor: any): string | undefined;
-  };
 
 export interface FindInPageHandle {
   openAndFocus(query?: string, options?: Partial<SearchOptions>): void;
@@ -58,7 +51,6 @@ interface AppProps {
   };
   searchOptionsStore?: SearchOptionsStore;
   locale?: SupportedLocale;
-  searchFactory?: () => SearchController;
 }
 
 export function App({
@@ -67,7 +59,6 @@ export function App({
   installAction,
   searchOptionsStore,
   locale = getBrowserLocale(),
-  searchFactory = () => new PageSearch(),
 }: AppProps) {
   const t = useCallback(
     (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) =>
@@ -88,7 +79,7 @@ export function App({
   const inputRef = useRef<HTMLInputElement>(null);
   const isOpenRef = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef(searchFactory());
+  const searchRef = useRef(new PageSearch());
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const lastSearchSignatureRef = useRef<string | undefined>(undefined);
   const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
@@ -381,7 +372,7 @@ export function App({
           });
         }
         if (ownerDocument.body) observeRoot(ownerDocument.body);
-        for (const shadowRoot of getOpenShadowRoots(ownerDocument.body)) {
+        for (const shadowRoot of getSearchableShadowRoots(ownerDocument.body)) {
           observeRoot(shadowRoot);
         }
       }

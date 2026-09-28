@@ -84,8 +84,8 @@ treats Unicode letters, Unicode numbers, and underscores as word characters.
 `Use regular expression` interprets the input as a raw JavaScript pattern
 without `/.../flags` delimiters; Unicode and global matching are automatic, and
 the case option controls case sensitivity. The three options can be combined.
-Find in Page searches the top-level Light DOM, accessible open
-Shadow DOM, and same-origin iframes, and shows every match, including context
+Find in Page searches the top-level Light DOM, Shadow DOM, and
+same-origin iframes, and shows every match, including context
 drawn from the nearest paragraph, list item, table cell, heading, blockquote, or
 preformatted block when available.
 Visible textarea values and editable `text`, `search`, `email`, `tel`, and `url`
@@ -108,7 +108,7 @@ Safari support is planned.
 | Open source and free to use | Yes | Yes | Yes | No |
 | Light and dark themes | Yes | Yes | Yes | No |
 | Context-rich results and page highlights | Yes | Yes | Yes | No |
-| Open Shadow DOM search | Yes | Yes | Yes | No |
+| Shadow DOM search | Yes | Yes | Yes | No |
 | Same-origin iframe search | Yes | Yes | Yes | No |
 | Live page updates | Yes | Yes | Yes | No |
 | `Command+F` / `Ctrl+F` and result-navigation shortcuts | Yes | Yes | Yes | No |
@@ -162,7 +162,7 @@ The configuration is stored in `components.json`, and shared theme tokens live i
 ## MVP support
 
 Find in Page searches visible text nodes currently present in the top-level DOM,
-open Shadow DOM, and same-origin iframes of ordinary HTTP and HTTPS pages. It
+Shadow DOM, and same-origin iframes of ordinary HTTP and HTTPS pages. It
 supports literal, case-sensitive, Unicode whole-word, and regular-expression
 queries and does not limit the number of results. Search runs in cancellable
 batches and reports results incrementally. Matching may span adjacent text nodes
@@ -173,7 +173,7 @@ The MVP does not search:
 
 - Chrome internal or other protected pages
 - Chrome's native PDF viewer
-- cross-origin iframes or closed Shadow DOM
+- cross-origin iframes
 - text rendered only in Canvas, WebGL, images, or video
 - virtualized content that has not been inserted into the DOM
 - other pages, tabs, or paginated content

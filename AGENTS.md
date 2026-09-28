@@ -5,7 +5,7 @@
 - **Description**: A browser extension that replaces the native find-in-page experience. It lists every match on the current page with surrounding context and supports result navigation, page highlighting, per-tab search state, and configurable case-sensitive, Unicode whole-word, and regular-expression matching.
 - **Tech stack**: WXT 0.20, React 19, TypeScript 5.9, Tailwind CSS 4, Base UI, locally maintained Shadcn components, and Lucide React.
 - **Runtime requirements**: Node.js 20+, pnpm, and Chrome 105+. Firefox development and build scripts are also available.
-- **Core scope**: Search covers visible Light DOM, accessible open Shadow DOM, same-origin nested iframes, visible textarea values, and visible `text`, `search`, `email`, `tel`, and `url` input values. It does not cover passwords, non-text controls, cross-origin iframes, closed Shadow DOM, Canvas/WebGL, images, video, or virtualized content that has not been mounted.
+- **Core scope**: Search covers visible Light DOM, Shadow DOM regardless of open/closed state, same-origin nested iframes, visible textarea values, and visible `text`, `search`, `email`, `tel`, and `url` input values. It does not cover passwords, non-text controls, cross-origin iframes, Canvas/WebGL, images, video, or virtualized content that has not been mounted.
 
 ## 2. Common Commands
 

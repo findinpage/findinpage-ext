@@ -43,6 +43,7 @@ describe('PageSearch', () => {
 
   afterEach(() => {
     pageSearch.clear();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -71,6 +72,23 @@ describe('PageSearch', () => {
     expect(response.results[0].match).toBe('needle');
     expect(host.shadowRoot).toBeNull();
     closedSearch.clear();
+  });
+
+  it('searches a closed root that existed before search initialization through the extension DOM API', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const closedRoot = host.attachShadow({ mode: 'closed' });
+    closedRoot.innerHTML = '<p>early sealed signal</p>';
+    vi.stubGlobal('browser', {
+      dom: {
+        openOrClosedShadowRoot: (element: HTMLElement) => element === host ? closedRoot : null,
+      },
+    });
+
+    const { response } = await search(pageSearch, 'signal');
+
+    expect(response.results).toHaveLength(1);
+    expect(host.shadowRoot).toBeNull();
   });
 
   it('searches nested open and closed roots below a retained closed root without duplicates', async () => {

@@ -1,7 +1,5 @@
 export const ACTIVE_HIGHLIGHT_NAME = 'findinpage-active-match';
 export const ALL_HIGHLIGHTS_NAME = 'findinpage-all-matches';
-export const CLOSED_ACTIVE_HIGHLIGHT_NAME = 'findinpage-closed-active-match';
-export const CLOSED_ALL_HIGHLIGHTS_NAME = 'findinpage-closed-all-matches';
 
 const EXCLUDED_SELECTOR = [
   'script', 'style', 'noscript', 'template', 'textarea', 'input', 'select',
@@ -271,14 +269,31 @@ function hasBreakBetween(previous: Text, current: Text, container: Element): boo
 export interface PageSearchScope {
   getRoots(): Node[];
   getShadowRoot?(element: Element): ShadowRoot | null | undefined;
-  activeHighlightName?: string;
-  allHighlightsName?: string;
+}
+
+declare global {
+  interface Window {
+    __findinpageClosedShadowRoots?: WeakMap<Element, ShadowRoot>;
+  }
+}
+
+export function getSearchableShadowRoot(element: Element): ShadowRoot | null {
+  if (element.shadowRoot) return element.shadowRoot;
+  const retainedRoot = window.__findinpageClosedShadowRoots?.get(element);
+  if (retainedRoot) return retainedRoot;
+  try {
+    return typeof browser !== 'undefined' && browser.dom?.openOrClosedShadowRoot
+      ? browser.dom.openOrClosedShadowRoot(element as HTMLElement)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function* walkComposedNodes(
   node: Node,
   visited = new Set<Node>(),
-  getShadowRoot: (element: Element) => ShadowRoot | null | undefined = (element) => element.shadowRoot,
+  getShadowRoot: (element: Element) => ShadowRoot | null | undefined = getSearchableShadowRoot,
 ): Generator<Node> {
   if (visited.has(node)) return;
   visited.add(node);
@@ -396,10 +411,8 @@ function createPageHighlightStyle(ownerDocument: Document): HTMLStyleElement {
   const style = ownerDocument.createElement('style');
   style.dataset.findinpageHighlight = 'true';
   style.textContent = `
-    ::highlight(${ALL_HIGHLIGHTS_NAME}), ::highlight(${CLOSED_ALL_HIGHLIGHTS_NAME}) {
-      background-color: #ffff05; color: #000000;
-    }
-    ::highlight(${ACTIVE_HIGHLIGHT_NAME}), ::highlight(${CLOSED_ACTIVE_HIGHLIGHT_NAME}) {
+    ::highlight(${ALL_HIGHLIGHTS_NAME}) { background-color: #ffff05; color: #000000; }
+    ::highlight(${ACTIVE_HIGHLIGHT_NAME}) {
       background-color: #ff9632; color: #000000; text-decoration: underline;
       text-decoration-color: #9a6700; text-decoration-thickness: 2px;
     }
@@ -423,7 +436,8 @@ export function getAccessibleDocuments(root: Document = document): Document[] {
   const visited = new Set<Document>();
   const visitParent = (parent: ParentNode) => {
     for (const element of parent.querySelectorAll('*')) {
-      if (element.shadowRoot) visitParent(element.shadowRoot);
+      const shadowRoot = getSearchableShadowRoot(element);
+      if (shadowRoot) visitParent(shadowRoot);
       if (element.localName !== 'iframe') continue;
       try { const frameDocument = (element as HTMLIFrameElement).contentDocument; if (frameDocument) visit(frameDocument); } catch {}
     }
@@ -436,12 +450,14 @@ export function getAccessibleDocuments(root: Document = document): Document[] {
   return documents;
 }
 
-export function getOpenShadowRoots(root: ParentNode = document.body): ShadowRoot[] {
+export function getSearchableShadowRoots(root: ParentNode = document.body): ShadowRoot[] {
   const roots: ShadowRoot[] = [];
   const visit = (parent: ParentNode) => {
     for (const element of parent.querySelectorAll('*')) {
-      if (element.hasAttribute('data-findinpage-host') || !element.shadowRoot) continue;
-      roots.push(element.shadowRoot); visit(element.shadowRoot);
+      if (element.hasAttribute('data-findinpage-host')) continue;
+      const shadowRoot = getSearchableShadowRoot(element);
+      if (!shadowRoot) continue;
+      roots.push(shadowRoot); visit(shadowRoot);
     }
   };
   visit(root);
@@ -459,14 +475,6 @@ export class PageSearch {
   private highlightsVisible = true;
 
   constructor(private readonly scope?: PageSearchScope) {}
-
-  private get activeHighlightName(): string {
-    return this.scope?.activeHighlightName ?? ACTIVE_HIGHLIGHT_NAME;
-  }
-
-  private get allHighlightsName(): string {
-    return this.scope?.allHighlightsName ?? ALL_HIGHLIGHTS_NAME;
-  }
 
   search(
     query: string,
@@ -658,7 +666,7 @@ export class PageSearch {
     } else if (location.range) {
       const registry = getHighlightRegistry(location.document);
       const HighlightForDocument = getHighlightConstructor(location.document);
-      if (registry && HighlightForDocument) registry.set(this.activeHighlightName, new HighlightForDocument(location.range));
+      if (registry && HighlightForDocument) registry.set(ACTIVE_HIGHLIGHT_NAME, new HighlightForDocument(location.range));
     }
     if (options.scroll !== false) {
       this.scrollLocationIntoView(location);
@@ -679,8 +687,8 @@ export class PageSearch {
     this.highlightsVisible = false;
     for (const ownerDocument of this.highlightedDocuments) {
       const registry = getHighlightRegistry(ownerDocument);
-      registry?.delete(this.activeHighlightName);
-      registry?.delete(this.allHighlightsName);
+      registry?.delete(ACTIVE_HIGHLIGHT_NAME);
+      registry?.delete(ALL_HIGHLIGHTS_NAME);
     }
     this.highlightedDocuments.clear();
     for (const span of this.fallbackSpans) span.dataset.findinpageFallback = 'hidden';
@@ -727,8 +735,8 @@ export class PageSearch {
       const registry = getHighlightRegistry(ownerDocument)!;
       const HighlightForDocument = getHighlightConstructor(ownerDocument)!;
       if (ownerDocument !== document) this.ensureFrameHighlightStyles(ownerDocument);
-      registry.delete(this.allHighlightsName);
-      registry.set(this.allHighlightsName, new HighlightForDocument(...ranges));
+      registry.delete(ALL_HIGHLIGHTS_NAME);
+      registry.set(ALL_HIGHLIGHTS_NAME, new HighlightForDocument(...ranges));
       this.highlightedDocuments.add(ownerDocument);
     }
   }
@@ -878,7 +886,7 @@ export class PageSearch {
   }
 
   private clearActiveHighlight(): void {
-    for (const ownerDocument of this.highlightedDocuments) getHighlightRegistry(ownerDocument)?.delete(this.activeHighlightName);
+    for (const ownerDocument of this.highlightedDocuments) getHighlightRegistry(ownerDocument)?.delete(ACTIVE_HIGHLIGHT_NAME);
     for (const span of this.fallbackSpans) span.dataset.findinpageFallback = 'match';
     this.setMirrorActive('');
   }
@@ -886,8 +894,8 @@ export class PageSearch {
   private clearRenderedHighlights(): void {
     for (const ownerDocument of this.highlightedDocuments) {
       const registry = getHighlightRegistry(ownerDocument);
-      registry?.get(this.activeHighlightName)?.clear(); registry?.get(this.allHighlightsName)?.clear();
-      registry?.delete(this.activeHighlightName); registry?.delete(this.allHighlightsName);
+      registry?.get(ACTIVE_HIGHLIGHT_NAME)?.clear(); registry?.get(ALL_HIGHLIGHTS_NAME)?.clear();
+      registry?.delete(ACTIVE_HIGHLIGHT_NAME); registry?.delete(ALL_HIGHLIGHTS_NAME);
     }
     this.highlightedDocuments.clear();
     for (const mirror of this.mirrors.values()) mirror.cleanup();
