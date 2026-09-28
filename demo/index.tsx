@@ -13,12 +13,33 @@ import {
 } from '@/entrypoints/content/search-options';
 import panelStyles from '@/assets/tailwind.css?inline';
 import { getBrowserLocale, resolveLocale, type SupportedLocale } from '@/lib/i18n';
+import {
+  DEFAULT_SEARCH_OPTIONS,
+  PageSearch,
+  type SearchOptions,
+  type SearchResponse,
+  type SearchResultDiagnostic,
+} from '@/entrypoints/content/search';
 
 export interface FindInPageDemoOptions {
   installUrl: string;
   installLabel?: string;
   initialQuery?: string;
   locale?: SupportedLocale | string;
+  testMode?: boolean;
+}
+
+export interface FindInPageDemoTestResult extends SearchResponse {
+  diagnostics: SearchResultDiagnostic[];
+}
+
+export interface FindInPageDemoTestApi {
+  begin(): void;
+  search(query: string, options?: Partial<SearchOptions>): Promise<FindInPageDemoTestResult>;
+  select(id: string, options?: { scroll?: boolean }): boolean;
+  cancel(): void;
+  clear(): void;
+  end(): void;
 }
 
 export interface FindInPageDemoHandle {
@@ -29,6 +50,7 @@ export interface FindInPageDemoHandle {
   focus(): void;
   isOpen(): boolean;
   destroy(): void;
+  testApi?: FindInPageDemoTestApi;
 }
 
 declare global {
@@ -102,17 +124,27 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
   };
   syncColorScheme();
 
-  const themeObserver = new MutationObserver(syncColorScheme);
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['class', 'style', 'data-theme'],
-  });
+  const ownerDocument = host.ownerDocument;
+  const ThemeMutationObserver = ownerDocument.defaultView?.MutationObserver;
+  const themeObserver = ThemeMutationObserver
+    ? new ThemeMutationObserver(syncColorScheme)
+    : undefined;
+  try {
+    themeObserver?.observe(ownerDocument.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-theme'],
+    });
+  } catch {
+    // Some isolated browser worlds reject observing their wrapped document node.
+  }
   colorScheme.addEventListener('change', syncColorScheme);
 
   let appHandle: FindInPageHandle | undefined;
   let openWhenReady = false;
   let navigateWhenReady: -1 | 1 | undefined;
   let destroyed = false;
+  const testSearch = options.testMode ? new PageSearch() : undefined;
+  let restoreOpenAfterTest = false;
   const root = createRoot(container);
 
   const onEscape = (event: KeyboardEvent) => {
@@ -157,6 +189,35 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
     </React.StrictMode>,
   );
 
+  const testApi: FindInPageDemoTestApi | undefined = testSearch ? {
+    begin() {
+      restoreOpenAfterTest = appHandle?.isOpen() ?? false;
+      appHandle?.close();
+      testSearch.clear();
+    },
+    async search(query, searchOptions = {}) {
+      const response = await testSearch.search(query, {
+        ...DEFAULT_SEARCH_OPTIONS,
+        ...searchOptions,
+      }).done;
+      return { ...response, diagnostics: testSearch.diagnose(response.results) };
+    },
+    select(id, selectOptions) {
+      return testSearch.select(id, selectOptions);
+    },
+    cancel() {
+      testSearch.cancelSearch();
+    },
+    clear() {
+      testSearch.clear();
+    },
+    end() {
+      testSearch.clear();
+      if (restoreOpenAfterTest) appHandle?.openAndFocus();
+      restoreOpenAfterTest = false;
+    },
+  } : undefined;
+
   const handle: FindInPageDemoHandle = {
     open() {
       if (destroyed) return;
@@ -184,13 +245,15 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
     isOpen() {
       return appHandle?.isOpen() ?? false;
     },
+    testApi,
     destroy() {
       if (destroyed) return;
       destroyed = true;
       window.removeEventListener('keydown', onEscape, { capture: true });
-      themeObserver.disconnect();
+      themeObserver?.disconnect();
       colorScheme.removeEventListener('change', syncColorScheme);
       appHandle?.destroy();
+      testSearch?.clear();
       root.unmount();
       host.remove();
     },

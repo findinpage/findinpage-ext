@@ -53,6 +53,12 @@ export interface SearchResponse {
   error?: SearchError;
 }
 
+export interface SearchResultDiagnostic {
+  id: string;
+  sourceType: 'light-dom' | 'shadow-dom' | 'control';
+  documentDepth: number;
+}
+
 export interface SearchTask {
   id: number;
   cancel(): void;
@@ -519,6 +525,29 @@ export class PageSearch {
   cancelSearch(): void {
     if (this.activeTask) this.activeTask.cancelled = true;
     this.activeTask = undefined;
+  }
+
+  diagnose(results: SearchResultView[]): SearchResultDiagnostic[] {
+    return results.flatMap((result) => {
+      const location = this.locations.get(result.id);
+      if (!location) return [];
+      let documentDepth = 0;
+      let ownerDocument: Document | null = location.document;
+      while (ownerDocument && ownerDocument !== document) {
+        documentDepth += 1;
+        ownerDocument = ownerDocument.defaultView?.frameElement?.ownerDocument ?? null;
+      }
+      const root = location.range?.startContainer.getRootNode();
+      return [{
+        id: result.id,
+        sourceType: location.control
+          ? 'control'
+          : root && root.nodeType === Node.DOCUMENT_FRAGMENT_NODE
+            ? 'shadow-dom'
+            : 'light-dom',
+        documentDepth,
+      }];
+    });
   }
 
   captureSelection(id: string): SelectionAnchor | undefined {
