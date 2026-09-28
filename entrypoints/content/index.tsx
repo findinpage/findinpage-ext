@@ -16,6 +16,14 @@ import {
   normalizeLocalePreference,
   type SupportedLocale,
 } from '@/lib/i18n';
+import {
+  getRestoredActiveResultIndex,
+  normalizePageUrl,
+  type SearchSession,
+  type SearchSessionMessage,
+  type SearchSessionPatch,
+  type SearchSessionResponse,
+} from '@/lib/search-session';
 
 type MountedUi = {
   root: Root;
@@ -44,6 +52,25 @@ const extensionSearchOptionsStore: SearchOptionsStore = {
     }
   },
 };
+
+async function loadSearchSession(): Promise<SearchSession | undefined> {
+  try {
+    const response = await browser.runtime.sendMessage<
+      SearchSessionMessage,
+      SearchSessionResponse
+    >({ type: 'GET_SEARCH_SESSION' });
+    return response?.ok ? response.session : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function updateSearchSession(patch: SearchSessionPatch): void {
+  void browser.runtime.sendMessage<SearchSessionMessage, SearchSessionResponse>({
+    type: 'UPDATE_SEARCH_SESSION',
+    patch,
+  }).catch(() => undefined);
+}
 
 function LocalizedApp(props: Omit<React.ComponentProps<typeof App>, 'locale'>) {
   const [locale, setLocale] = useState<SupportedLocale>(getBrowserLocale());
@@ -80,6 +107,12 @@ export default defineContentScript({
     let shadowHostElement: HTMLElement | undefined;
     let openWhenReady = false;
     let navigateWhenReady: -1 | 1 | undefined;
+    let restoredSession = false;
+    const currentUrl = normalizePageUrl(location.href);
+    const initialStatePromise = Promise.all([
+      loadSearchSession(),
+      extensionSearchOptionsStore.load(),
+    ]);
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
     if (location.origin === 'https://findin.page') {
@@ -244,6 +277,16 @@ export default defineContentScript({
       systemColorScheme.removeEventListener('change', syncColorScheme);
     });
 
+    const [savedSession, globalSearchOptions] = await initialStatePromise;
+    const restoreSamePage = Boolean(
+      savedSession?.isOpen &&
+      savedSession.searchUrl &&
+      currentUrl === savedSession.searchUrl,
+    );
+    const initialSearchOptions = restoreSamePage
+      ? savedSession!.searchOptions
+      : globalSearchOptions;
+
     const ui = await createShadowRootUi<MountedUi>(ctx, {
       name: 'findinpage-search',
       position: 'modal',
@@ -273,17 +316,60 @@ export default defineContentScript({
         root.render(
           <React.StrictMode>
             <LocalizedApp
+              initialQuery={savedSession?.query ?? ''}
+              initialSearchOptions={initialSearchOptions}
               searchOptionsStore={extensionSearchOptionsStore}
-        onReady={(handle) => {
-          appHandle = handle;
-          if (navigateWhenReady) {
-            const direction = navigateWhenReady;
-            navigateWhenReady = undefined;
-            openWhenReady = false;
-            handle.navigate(direction);
-          } else if (openWhenReady) {
-            openWhenReady = false;
-            handle.openAndFocus();
+              onOpenChange={(isOpen) => updateSearchSession({ isOpen })}
+              onQueryChange={(query, searchOptions) => updateSearchSession({
+                query,
+                searchOptions,
+                searchUrl: currentUrl,
+              })}
+              onSearchOptionsChange={(searchOptions) => updateSearchSession({
+                searchOptions,
+                searchUrl: currentUrl,
+              })}
+              onSearchExecuted={(query, searchOptions) => updateSearchSession({
+                query,
+                searchOptions,
+                searchUrl: currentUrl,
+              })}
+              onActiveResultChange={(activeResultIndex) => updateSearchSession({
+                activeResultIndex: activeResultIndex ?? null,
+                activeResultUrl: activeResultIndex === undefined
+                  ? null
+                  : currentUrl,
+              })}
+              onReady={(handle) => {
+                appHandle = handle;
+                if (navigateWhenReady) {
+                  const direction = navigateWhenReady;
+                  navigateWhenReady = undefined;
+                  openWhenReady = false;
+                  handle.navigate(direction);
+                } else if (openWhenReady) {
+                  openWhenReady = false;
+                  handle.openAndFocus();
+                } else if (savedSession?.isOpen && !restoredSession) {
+                  restoredSession = true;
+                  handle.restoreSession(
+                    savedSession.query,
+                    initialSearchOptions,
+                    getRestoredActiveResultIndex(savedSession, currentUrl),
+                  );
+                  if (restoreSamePage && savedSession.query.length > 0) {
+                    if (document.readyState === 'loading') {
+                      const runRestoredSearch = () => handle.runPendingSearch();
+                      document.addEventListener('DOMContentLoaded', runRestoredSearch, {
+                        once: true,
+                      });
+                      ctx.onInvalidated(() => {
+                        document.removeEventListener('DOMContentLoaded', runRestoredSearch);
+                      });
+                    } else {
+                      handle.runPendingSearch();
+                    }
+                  }
                 }
               }}
             />

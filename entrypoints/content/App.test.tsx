@@ -204,4 +204,114 @@ describe('App close and reopen', () => {
     );
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
   });
+
+  it('restores a cross-page query without searching until Enter is pressed', () => {
+    const search = mockSearch(true);
+    act(() => {
+      root.render(
+        <App
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      handle.restoreSession('retained query', {
+        caseSensitive: false,
+        wholeWord: true,
+        useRegularExpression: false,
+      });
+      vi.runAllTimers();
+    });
+
+    expect(handle.isOpen()).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('.findinpage-input')?.value)
+      .toBe('retained query');
+    expect(search).not.toHaveBeenCalled();
+
+    act(() => {
+      const input = container.querySelector<HTMLInputElement>('.findinpage-input');
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+
+    expect(search).toHaveBeenCalledOnce();
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith(
+      'result-1',
+      { scroll: true },
+    );
+  });
+
+  it('reruns a restored same-page query and restores its result index without scrolling', () => {
+    const search = mockSearch(true);
+    act(() => {
+      root.render(
+        <App
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      handle.restoreSession(
+        'needle',
+        {
+          caseSensitive: true,
+          wholeWord: false,
+          useRegularExpression: false,
+        },
+        2,
+      );
+      handle.runPendingSearch();
+    });
+
+    expect(search).toHaveBeenCalledWith(
+      'needle',
+      {
+        caseSensitive: true,
+        wholeWord: false,
+        useRegularExpression: false,
+      },
+      expect.any(Function),
+    );
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith(
+      'result-3',
+      { scroll: false },
+    );
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+  });
+
+  it('keeps a restored same-page search explicitly unselected', () => {
+    const search = mockSearch(true);
+    const select = vi.mocked(PageSearch.prototype.select);
+    act(() => {
+      root.render(
+        <App
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      handle.restoreSession(
+        'needle',
+        {
+          caseSensitive: false,
+          wholeWord: false,
+          useRegularExpression: false,
+        },
+        null,
+      );
+      handle.runPendingSearch();
+    });
+
+    expect(search).toHaveBeenCalledOnce();
+    expect(select).not.toHaveBeenCalled();
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('0/3');
+  });
 });

@@ -76,6 +76,8 @@
 - On narrow mobile viewports, keep focusable text inputs at a computed font size of at least `16px` to prevent browser focus zoom. Verify that opening, closing, and reopening the panel does not change the host page width or introduce horizontal scrolling.
 - Do not interfere with the host page when the extension is inactive. Closing the panel must restore focus and hide highlights, while the extension host remains transparent and only the panel receives pointer events.
 - Closing the panel must retain the in-memory query, current results, active result, result-list scroll position, and last search signature. Reopening with the same query and options must only restore highlights with scrolling disabled: it must not rerun or resume the search, select a different result, or change the host page's current scroll position. A new search should run only after the query or search options change.
+- Persist refresh-restoration state per tab in extension session storage. Bind both the query state and any active-result index to normalized top-level URLs (ignore fragments, preserve query strings). On the same normalized URL, restore the panel, query, options, and selection state, then rebuild results without scrolling. On a different URL, retain the open panel and query but do not automatically search or reuse the prior page's active-result index.
+- Treat `0/x` as an explicit selection state, not as missing restoration data. If a same-page search had results but no active result before refresh, rebuild the results and keep `0/x`; do not automatically select `1/x`. Restore an index only when its owning normalized URL matches the current page, and clamp an out-of-range same-page index to the final result.
 
 ### Search And Batching
 

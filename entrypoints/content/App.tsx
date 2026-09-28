@@ -27,6 +27,12 @@ import type { SearchOptionsStore } from './search-options';
 
 export interface FindInPageHandle {
   openAndFocus(query?: string, options?: Partial<SearchOptions>): void;
+  restoreSession(
+    query: string,
+    options: SearchOptions,
+    activeResultIndex?: number | null,
+  ): void;
+  runPendingSearch(): void;
   navigate(direction: -1 | 1): void;
   search(selection: SearchSelectionRequest): void;
   toggle(): void;
@@ -45,6 +51,12 @@ export interface SearchSelectionRequest {
 interface AppProps {
   onReady(handle: FindInPageHandle): void;
   initialQuery?: string;
+  initialSearchOptions?: SearchOptions;
+  onOpenChange?(isOpen: boolean): void;
+  onQueryChange?(query: string, options: SearchOptions): void;
+  onSearchOptionsChange?(options: SearchOptions): void;
+  onSearchExecuted?(query: string, options: SearchOptions): void;
+  onActiveResultChange?(index: number | undefined): void;
   installAction?: {
     label: string;
     onClick(): void;
@@ -56,6 +68,12 @@ interface AppProps {
 export function App({
   onReady,
   initialQuery = '',
+  initialSearchOptions,
+  onOpenChange,
+  onQueryChange,
+  onSearchOptionsChange,
+  onSearchExecuted,
+  onActiveResultChange,
   installAction,
   searchOptionsStore,
   locale = getBrowserLocale(),
@@ -67,7 +85,9 @@ export function App({
   );
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState(initialQuery);
-  const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>(
+    initialSearchOptions ?? DEFAULT_SEARCH_OPTIONS,
+  );
   const [searchError, setSearchError] = useState<SearchError>();
   const [isSearching, setIsSearching] = useState(false);
   const [highlightMode, setHighlightMode] = useState<HighlightMode>('native');
@@ -87,6 +107,16 @@ export function App({
   const suppressPageScrollRefreshUntilRef = useRef(0);
   const highlightFrameRef = useRef<number | undefined>(undefined);
   const searchTaskIdRef = useRef<number | undefined>(undefined);
+  const pendingSearchRef = useRef(false);
+  const pendingActiveResultIndexRef = useRef<number | null | undefined>(undefined);
+  const queryRef = useRef(query);
+  const searchOptionsRef = useRef(searchOptions);
+  const restoreSessionRef = useRef<(
+    query: string,
+    options: SearchOptions,
+    activeResultIndex?: number | null,
+  ) => void>(() => {});
+  const runPendingSearchRef = useRef<() => void>(() => {});
   const navigateShortcutRef = useRef<(direction: -1 | 1) => void>(() => {});
   const searchSelectionRef = useRef<(selection: SearchSelectionRequest) => void>(() => {});
   const resultVirtualizer = useVirtualizer({
@@ -95,11 +125,13 @@ export function App({
     estimateSize: () => 60,
     overscan: 6,
   });
+  queryRef.current = query;
+  searchOptionsRef.current = searchOptions;
 
   useEffect(() => installPageHighlightStyles(), []);
 
   useEffect(() => {
-    if (!searchOptionsStore) return;
+    if (!searchOptionsStore || initialSearchOptions) return;
     let active = true;
     void searchOptionsStore.load().then((options) => {
       if (active) setSearchOptions(options);
@@ -107,7 +139,7 @@ export function App({
     return () => {
       active = false;
     };
-  }, [searchOptionsStore]);
+  }, [initialSearchOptions, searchOptionsStore]);
 
   const setOptionsVisibility = useCallback((open: boolean) => {
     optionsOpenRef.current = open;
@@ -164,17 +196,19 @@ export function App({
     searchRef.current.hideHighlights();
     setPanelVisibility(false);
     setIsOpen(false);
+    onOpenChange?.(false);
     restoreFocusRef.current?.focus({ preventScroll: true });
     restoreFocusRef.current = null;
     deferHighlightUpdate(() => {
       if (!isOpenRef.current) searchRef.current.hideHighlights();
     });
-  }, [deferHighlightUpdate, setPanelVisibility]);
+  }, [deferHighlightUpdate, onOpenChange, setPanelVisibility]);
 
   useEffect(() => {
     const open = (
       queryOverride?: string | boolean,
       optionsOverride?: Partial<SearchOptions>,
+      reportOpen = true,
     ) => {
       const restoreHighlights = typeof queryOverride === 'boolean' ? queryOverride : true;
       if (typeof queryOverride === 'string') {
@@ -191,6 +225,7 @@ export function App({
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setPanelVisibility(true);
         setIsOpen(true);
+        if (reportOpen) onOpenChange?.(true);
         if (restoreHighlights) {
           deferHighlightUpdate(() => {
             if (isOpenRef.current) searchRef.current.restoreHighlights(activeId);
@@ -202,6 +237,12 @@ export function App({
 
     const handle: FindInPageHandle = {
       openAndFocus: (queryOverride, optionsOverride) => open(queryOverride, optionsOverride),
+      restoreSession(query, options, activeResultIndex) {
+        restoreSessionRef.current(query, options, activeResultIndex);
+      },
+      runPendingSearch() {
+        runPendingSearchRef.current();
+      },
       navigate(direction) {
         navigateShortcutRef.current(direction);
       },
@@ -229,7 +270,7 @@ export function App({
       },
     };
     onReady(handle);
-  }, [activeId, close, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onReady, setOptionsVisibility, setPanelVisibility]);
+  }, [activeId, close, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onOpenChange, onReady, setOptionsVisibility, setPanelVisibility]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -243,6 +284,8 @@ export function App({
       nextQuery = query,
       nextSearchOptions = searchOptions,
       selectedRange?: Range,
+      scrollToInitialResult = true,
+      initialResultIndex?: number | null,
     ) => {
       const selectionAnchor =
         preservePosition && activeId
@@ -256,6 +299,8 @@ export function App({
         : undefined;
 
       lastSearchSignatureRef.current = JSON.stringify([nextQuery, nextSearchOptions]);
+      pendingSearchRef.current = false;
+      onSearchExecuted?.(nextQuery, nextSearchOptions);
       setIsSearching(nextQuery.length > 0);
       let selectedInitialResult = false;
       let selectedResultId: string | undefined;
@@ -281,6 +326,13 @@ export function App({
           ? response.complete
             ? response.results[navigateOnComplete === 1 ? 0 : response.results.length - 1]
             : undefined
+          : initialResultIndex === null
+            ? undefined
+          : initialResultIndex !== undefined
+            ? response.results[initialResultIndex] ??
+              (response.complete && response.results.length > 0
+                ? response.results[Math.min(initialResultIndex, response.results.length - 1)]
+                : undefined)
           : preservePosition
             ? response.results.find((result) => result.id === resolvedId)
             : response.results[0];
@@ -290,13 +342,18 @@ export function App({
           if (!preservePosition && !rangeSelectionAnchor) suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
           setActiveId(
             searchRef.current.select(nextResult.id, {
-              scroll: !preservePosition && !rangeSelectionAnchor,
+              scroll: scrollToInitialResult && !preservePosition && !rangeSelectionAnchor,
             })
               ? nextResult.id
               : undefined,
           );
+          onActiveResultChange?.(response.results.indexOf(nextResult));
+        } else if (response.complete && initialResultIndex === null) {
+          setActiveId(undefined);
+          onActiveResultChange?.(undefined);
         } else if (response.complete && response.results.length === 0) {
           setActiveId(undefined);
+          onActiveResultChange?.(undefined);
         } else if (response.complete && selectedResultId) {
           searchRef.current.select(selectedResultId, { scroll: false });
         }
@@ -304,8 +361,42 @@ export function App({
       taskId = task.id;
       searchTaskIdRef.current = task.id;
     },
-    [activeId, query, searchOptions],
+    [activeId, onActiveResultChange, onSearchExecuted, query, searchOptions],
   );
+
+  restoreSessionRef.current = (restoredQuery, restoredOptions, activeResultIndex) => {
+    queryRef.current = restoredQuery;
+    searchOptionsRef.current = restoredOptions;
+    setQuery(restoredQuery);
+    setSearchOptions(restoredOptions);
+    setSearchError(undefined);
+    setResults([]);
+    setActiveId(undefined);
+    lastSearchSignatureRef.current = JSON.stringify([restoredQuery, restoredOptions]);
+    pendingSearchRef.current = restoredQuery.length > 0;
+    pendingActiveResultIndexRef.current = activeResultIndex;
+    if (!isOpenRef.current) {
+      isOpenRef.current = true;
+      restoreFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPanelVisibility(true);
+      setIsOpen(true);
+    }
+    focusInput();
+  };
+
+  runPendingSearchRef.current = () => {
+    runSearch(
+      false,
+      undefined,
+      queryRef.current,
+      searchOptionsRef.current,
+      undefined,
+      false,
+      pendingActiveResultIndexRef.current,
+    );
+    pendingActiveResultIndexRef.current = undefined;
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -417,6 +508,7 @@ export function App({
     }
     if (searchRef.current.select(result.id, { scroll })) {
       setActiveId(result.id);
+      onActiveResultChange?.(results.indexOf(result));
       return;
     }
 
@@ -444,11 +536,12 @@ export function App({
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setPanelVisibility(true);
       setIsOpen(true);
+      onOpenChange?.(true);
       focusInput();
     }
 
     const signature = JSON.stringify([query, searchOptions]);
-    if (lastSearchSignatureRef.current !== signature) {
+    if (pendingSearchRef.current || lastSearchSignatureRef.current !== signature) {
       runSearch(false, direction);
       return;
     }
@@ -456,7 +549,9 @@ export function App({
   };
 
   searchSelectionRef.current = (selection) => {
+    pendingSearchRef.current = false;
     setQuery(selection.text);
+    onQueryChange?.(selection.text, searchOptions);
     runSearch(false, undefined, selection.text, searchOptions, selection.range);
     focusInput();
   };
@@ -522,7 +617,10 @@ export function App({
     if (event.nativeEvent.isComposing) return;
     if (event.key === 'Enter') {
       event.preventDefault();
-      if (lastSearchSignatureRef.current !== JSON.stringify([query, searchOptions])) {
+      if (
+        pendingSearchRef.current ||
+        lastSearchSignatureRef.current !== JSON.stringify([query, searchOptions])
+      ) {
         runSearch(false);
       } else if (!navigationDisabled) {
         navigateResult(1);
@@ -537,9 +635,11 @@ export function App({
   };
 
   const updateSearchOption = (name: keyof SearchOptions, checked: boolean) => {
+    pendingSearchRef.current = false;
     const nextOptions = { ...searchOptions, [name]: checked };
     setSearchOptions(nextOptions);
     void searchOptionsStore?.save(nextOptions);
+    onSearchOptionsChange?.(nextOptions);
   };
 
   return (
@@ -574,7 +674,11 @@ export function App({
             spellCheck={false}
             value={query}
             onKeyDown={handleSearchInputKeyDown}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              pendingSearchRef.current = false;
+              setQuery(event.target.value);
+              onQueryChange?.(event.target.value, searchOptions);
+            }}
           />
           {results.length > 0 && (
             <span
