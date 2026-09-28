@@ -1,6 +1,13 @@
 # Find in Page
 
-Find in Page is a Chrome extension that replaces the ordinary find-in-page interaction with a compact list of every match and its surrounding context.
+Find in Page is a free, open-source browser extension that replaces the ordinary
+find-in-page interaction with a compact list of every match and its surrounding
+context. It keeps the familiar `Command+F` / `Ctrl+F` shortcut while making it
+easier to scan a page and jump directly to the result you need.
+
+- Website: [findin.page](https://findin.page)
+- Source: [github.com/findinpage/findinpage-ext](https://github.com/findinpage/findinpage-ext)
+- Support: [support@findin.page](mailto:support@findin.page)
 
 The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadcn components. The page-search panel is mounted in a Shadow DOM so its styles remain isolated from the websites it runs on.
 
@@ -10,14 +17,16 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   `Ctrl+F` on Windows/Linux, or the extension toolbar icon. Press `Escape` to
   close the panel.
 - **Context-rich results:** see every match in document order, numbered and
-  shown with the surrounding text instead of stepping through matches one at a
-  time. The result list is virtualized so large result sets do not mount every
-  row at once.
+  shown with nearby words from its paragraph, heading, list item, table cell,
+  blockquote, or code block instead of stepping through matches one at a time.
+  The result list is virtualized so large result sets do not mount every row at
+  once.
 - **Fast navigation:** click a result, use the previous/next buttons, or press
   the Up and Down arrow keys while the panel is focused. Press Enter in the
   search field to run a pending search or move to the next result. Previous and
-  next navigation wraps at either end. Choosing a result centers its source text
-  in the viewport.
+  next navigation wraps at either end. `Command+G` / `Ctrl+G` moves to the next
+  result, and adding Shift moves to the previous result, even when the panel is
+  closed. Choosing a result centers its source text in the viewport.
 - **Precise matching:** open Search options to match case, require Unicode whole
   words, use a regular expression, or combine all three behaviors. Preferences
   are retained across pages and browser sessions.
@@ -34,16 +43,36 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   content changes or scrolling reveals newly rendered content. Find in Page keeps
   the active result and result-list position when it can still identify them.
 - **Per-tab state:** each tab retains its own query, selected result, and result
-  list. Closing and reopening the panel preserves that state and refreshes the
-  search against the current page.
+  list. Closing and reopening the panel restores that state without moving the
+  page or rerunning an unchanged search.
 - **Theme-aware isolated UI:** the panel follows the page or system light/dark
   preference and runs inside a Shadow DOM so website styles do not leak into
   it.
+- **Localized interface:** the panel and settings are available in English,
+  Simplified Chinese, Traditional Chinese, Japanese, and Korean, with an
+  automatic browser-language mode.
 - **Accessible navigation:** the search field and result list expose combobox
   semantics, announce the match count and active result, and support complete
   keyboard navigation without tabbing through every match.
 - **Local and private:** searches run entirely in the current tab. Page text and
   queries are never sent over the network.
+
+## Keyboard shortcuts
+
+| macOS | Windows/Linux | Description |
+| --- | --- | --- |
+| `Command+F` | `Ctrl+F` | Open or close Find in Page. |
+| `Command+G` | `Ctrl+G` | Open the panel if needed, run any pending search, and move to the next result. |
+| `Command+Shift+G` | `Ctrl+Shift+G` | Open the panel if needed, run any pending search, and move to the previous result. |
+| `Command+E` | `Ctrl+E` | While the panel is open, search for the text currently selected on the page. |
+| `Enter` | `Enter` | Run a pending search or move to the next result while the search field is focused. |
+| `Arrow Up` / `Arrow Down` | `Arrow Up` / `Arrow Down` | Move to the previous or next result while the panel is focused. |
+| `Escape` | `Escape` | Close Search options first when open; otherwise close the panel. |
+
+> **Using the browser's built-in find:** while Find in Page is enabled, pressing
+> `Command+F` or `Ctrl+F` with the page focused opens Find in Page. To use the
+> browser's original find box instead, move focus to the address bar before
+> pressing the shortcut, or choose **Find** from the browser menu.
 
 Search is case-insensitive and treats the complete query, including spaces, as
 literal text by default. `Match case` requires exact casing. `Match whole word`
@@ -64,13 +93,31 @@ CSS Custom Highlights are used when available. Documents without that API use a
 temporary DOM-span compatibility mode that is removed when the search is
 replaced or the extension is destroyed.
 
+## Browser support
+
+The core Find in Page experience is available in Chrome, Edge, and Firefox.
+Safari support is planned.
+
+| Feature | Chrome | Edge | Firefox | Safari |
+| --- | :---: | :---: | :---: | :---: |
+| Available today | Yes | Yes | Yes | Planned |
+| Open source and free to use | Yes | Yes | Yes | No |
+| Light and dark themes | Yes | Yes | Yes | No |
+| Context-rich results and page highlights | Yes | Yes | Yes | No |
+| Open Shadow DOM search | Yes | Yes | Yes | No |
+| Same-origin iframe search | Yes | Yes | Yes | No |
+| Live page updates | Yes | Yes | Yes | No |
+| `Command+F` / `Ctrl+F` and result-navigation shortcuts | Yes | Yes | Yes | No |
+| Regular expressions | Yes | Yes | Yes | No |
+| Case-sensitive and Unicode whole-word search | Yes | Yes | Yes | No |
+
 ## Development
 
 Requirements:
 
 - Node.js 20 or later
 - pnpm
-- Google Chrome 105 or later
+- Google Chrome 105 or later for Chrome development
 
 Install dependencies and start WXT in development mode:
 
@@ -78,6 +125,8 @@ Install dependencies and start WXT in development mode:
 pnpm install
 pnpm dev
 ```
+
+For Firefox development, run `pnpm dev:firefox`.
 
 WXT opens a development browser with the extension loaded. To load a production build manually:
 
@@ -92,6 +141,7 @@ Useful checks:
 ```bash
 pnpm compile
 pnpm build
+pnpm build:firefox
 pnpm test
 ```
 

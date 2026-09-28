@@ -27,6 +27,8 @@ import type { SearchOptionsStore } from './search-options';
 
 export interface FindInPageHandle {
   openAndFocus(): void;
+  navigate(direction: -1 | 1): void;
+  search(text: string): void;
   toggle(): void;
   close(): void;
   focus(): void;
@@ -80,6 +82,8 @@ export function App({
   const suppressPageScrollRefreshUntilRef = useRef(0);
   const highlightFrameRef = useRef<number | undefined>(undefined);
   const searchTaskIdRef = useRef<number | undefined>(undefined);
+  const navigateShortcutRef = useRef<(direction: -1 | 1) => void>(() => {});
+  const searchTextRef = useRef<(text: string) => void>(() => {});
   const resultVirtualizer = useVirtualizer({
     count: results.length,
     getScrollElement: () => resultsRef.current,
@@ -163,22 +167,30 @@ export function App({
   }, [deferHighlightUpdate, setPanelVisibility]);
 
   useEffect(() => {
-    const open = () => {
+    const open = (restoreHighlights = true) => {
       if (!isOpenRef.current) {
         isOpenRef.current = true;
         restoreFocusRef.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setPanelVisibility(true);
         setIsOpen(true);
-        deferHighlightUpdate(() => {
-          if (isOpenRef.current) searchRef.current.restoreHighlights(activeId);
-        });
+        if (restoreHighlights) {
+          deferHighlightUpdate(() => {
+            if (isOpenRef.current) searchRef.current.restoreHighlights(activeId);
+          });
+        }
       }
       focusInput();
     };
 
     const handle: FindInPageHandle = {
       openAndFocus: open,
+      navigate(direction) {
+        navigateShortcutRef.current(direction);
+      },
+      search(text) {
+        searchTextRef.current(text);
+      },
       toggle() {
         if (isOpenRef.current) close();
         else open();
@@ -208,7 +220,12 @@ export function App({
   }, [focusInput, isOpen]);
 
   const runSearch = useCallback(
-    (preservePosition: boolean) => {
+    (
+      preservePosition: boolean,
+      navigateOnComplete?: -1 | 1,
+      nextQuery = query,
+      nextSearchOptions = searchOptions,
+    ) => {
       const selectionAnchor =
         preservePosition && activeId
           ? searchRef.current.captureSelection(activeId)
@@ -217,12 +234,12 @@ export function App({
         pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
       }
 
-      lastSearchSignatureRef.current = JSON.stringify([query, searchOptions]);
-      setIsSearching(query.length > 0);
+      lastSearchSignatureRef.current = JSON.stringify([nextQuery, nextSearchOptions]);
+      setIsSearching(nextQuery.length > 0);
       let selectedInitialResult = false;
       let selectedResultId: string | undefined;
       let taskId: number | undefined;
-      const task = searchRef.current.search(query, searchOptions, (response) => {
+      const task = searchRef.current.search(nextQuery, nextSearchOptions, (response) => {
         if (taskId !== undefined && searchTaskIdRef.current !== taskId) return;
         setSearchError(response.error);
         setResults(response.results);
@@ -232,9 +249,13 @@ export function App({
         const resolvedId = selectionAnchor
           ? searchRef.current.resolveSelection(selectionAnchor)
           : undefined;
-        const nextResult = preservePosition
-          ? response.results.find((result) => result.id === resolvedId)
-          : response.results[0];
+        const nextResult = navigateOnComplete
+          ? response.complete
+            ? response.results[navigateOnComplete === 1 ? 0 : response.results.length - 1]
+            : undefined
+          : preservePosition
+            ? response.results.find((result) => result.id === resolvedId)
+            : response.results[0];
         if (!selectedInitialResult && nextResult) {
           selectedInitialResult = true;
           selectedResultId = nextResult.id;
@@ -383,6 +404,31 @@ export function App({
           : results.length - 1
         : (currentIndex + direction + results.length) % results.length;
     selectResult(results[nextIndex]);
+  };
+
+  navigateShortcutRef.current = (direction) => {
+    const wasOpen = isOpenRef.current;
+    if (!wasOpen) {
+      isOpenRef.current = true;
+      restoreFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPanelVisibility(true);
+      setIsOpen(true);
+      focusInput();
+    }
+
+    const signature = JSON.stringify([query, searchOptions]);
+    if (lastSearchSignatureRef.current !== signature) {
+      runSearch(false, direction);
+      return;
+    }
+    navigateResult(direction);
+  };
+
+  searchTextRef.current = (text) => {
+    setQuery(text);
+    runSearch(false, undefined, text);
+    focusInput();
   };
 
   useEffect(() => {

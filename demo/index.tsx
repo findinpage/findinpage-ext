@@ -19,6 +19,8 @@ export interface FindInPageDemoOptions {
 
 export interface FindInPageDemoHandle {
   open(): void;
+  navigate(direction: -1 | 1): void;
+  search(text: string): void;
   close(): void;
   focus(): void;
   isOpen(): boolean;
@@ -105,6 +107,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
 
   let appHandle: FindInPageHandle | undefined;
   let openWhenReady = false;
+  let navigateWhenReady: -1 | 1 | undefined;
   let destroyed = false;
   const root = createRoot(container);
 
@@ -136,7 +139,12 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
         }}
         onReady={(handle) => {
           appHandle = handle;
-          if (openWhenReady) {
+          if (navigateWhenReady) {
+            const direction = navigateWhenReady;
+            navigateWhenReady = undefined;
+            openWhenReady = false;
+            handle.navigate(direction);
+          } else if (openWhenReady) {
             openWhenReady = false;
             handle.openAndFocus();
           }
@@ -150,6 +158,18 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
       if (destroyed) return;
       if (appHandle) appHandle.openAndFocus();
       else openWhenReady = true;
+    },
+    navigate(direction) {
+      if (destroyed) return;
+      if (appHandle) appHandle.navigate(direction);
+      else {
+        openWhenReady = true;
+        navigateWhenReady = direction;
+      }
+    },
+    search(text) {
+      if (destroyed || !appHandle?.isOpen()) return;
+      appHandle.search(text);
     },
     close() {
       appHandle?.close();

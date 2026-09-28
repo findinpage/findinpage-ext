@@ -119,4 +119,59 @@ describe('App close and reopen', () => {
     expect(search).toHaveBeenCalledTimes(1);
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
   });
+
+  it('opens a closed panel and navigates once through retained results', () => {
+    const search = mockSearch(true);
+    renderAndOpen();
+
+    act(() => {
+      handle.close();
+      handle.navigate(1);
+    });
+
+    expect(handle.isOpen()).toBe(true);
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('2/3');
+  });
+
+  it('runs a pending query before navigating backward', () => {
+    const search = mockSearch(true);
+    renderAndOpen();
+    const input = container.querySelector<HTMLInputElement>('.findinpage-input');
+
+    act(() => {
+      if (!input) throw new Error('Search input was not rendered.');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        input,
+        'updated',
+      );
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => handle.navigate(-1));
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenLastCalledWith(
+      'updated',
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+  });
+
+  it('fills the input and immediately searches selected page text', () => {
+    const search = mockSearch(true);
+    renderAndOpen();
+
+    act(() => handle.search('selected text'));
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenLastCalledWith(
+      'selected text',
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(container.querySelector<HTMLInputElement>('.findinpage-input')?.value)
+      .toBe('selected text');
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
+  });
 });

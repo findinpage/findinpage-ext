@@ -79,6 +79,7 @@ export default defineContentScript({
     let appHandle: FindInPageHandle | undefined;
     let shadowHostElement: HTMLElement | undefined;
     let openWhenReady = false;
+    let navigateWhenReady: -1 | 1 | undefined;
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
     if (location.origin === 'https://findin.page') {
@@ -142,6 +143,51 @@ export default defineContentScript({
       }
     };
 
+    const onNavigationShortcut = (event: KeyboardEvent) => {
+      const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+      const primaryModifier = isMac
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      const isNavigationShortcut =
+        primaryModifier &&
+        !event.altKey &&
+        !event.isComposing &&
+        event.key.toLowerCase() === 'g';
+
+      if (!isNavigationShortcut) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const direction = event.shiftKey ? -1 : 1;
+      if (appHandle) {
+        appHandle.navigate(direction);
+      } else {
+        navigateWhenReady = direction;
+      }
+    };
+
+    const onSearchSelectionShortcut = (event: KeyboardEvent) => {
+      const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+      const primaryModifier = isMac
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      const isSearchSelectionShortcut =
+        primaryModifier &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !event.isComposing &&
+        event.key.toLowerCase() === 'e';
+
+      if (!isSearchSelectionShortcut || !appHandle?.isOpen()) return;
+      const selectedText = window.getSelection()?.toString().trim() ?? '';
+      if (!selectedText) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      appHandle.search(selectedText);
+    };
+
     const onGlobalKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || !appHandle?.isOpen()) return;
 
@@ -168,6 +214,8 @@ export default defineContentScript({
     };
 
     window.addEventListener('keydown', onFindShortcut, { capture: true });
+    window.addEventListener('keydown', onNavigationShortcut, { capture: true });
+    window.addEventListener('keydown', onSearchSelectionShortcut, { capture: true });
     window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
     window.addEventListener('focus', keepFindInPageFocused, { capture: true });
     window.addEventListener('focusin', keepFindInPageFocused, { capture: true });
@@ -185,6 +233,8 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       window.removeEventListener('keydown', onFindShortcut, { capture: true });
+      window.removeEventListener('keydown', onNavigationShortcut, { capture: true });
+      window.removeEventListener('keydown', onSearchSelectionShortcut, { capture: true });
       window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
       window.removeEventListener('focus', keepFindInPageFocused, { capture: true });
       window.removeEventListener('focusin', keepFindInPageFocused, { capture: true });
@@ -223,11 +273,16 @@ export default defineContentScript({
           <React.StrictMode>
             <LocalizedApp
               searchOptionsStore={extensionSearchOptionsStore}
-              onReady={(handle) => {
-                appHandle = handle;
-                if (openWhenReady) {
-                  openWhenReady = false;
-                  handle.openAndFocus();
+        onReady={(handle) => {
+          appHandle = handle;
+          if (navigateWhenReady) {
+            const direction = navigateWhenReady;
+            navigateWhenReady = undefined;
+            openWhenReady = false;
+            handle.navigate(direction);
+          } else if (openWhenReady) {
+            openWhenReady = false;
+            handle.openAndFocus();
                 }
               }}
             />

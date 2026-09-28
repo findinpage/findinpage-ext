@@ -19,7 +19,19 @@
 - **Package the Firefox extension**: `pnpm zip:firefox`
 - **Tests**: Run `pnpm test` for the Vitest/jsdom search and highlighting suite. Before submitting changes, also run `pnpm compile` and `pnpm build`, then manually verify any affected extension interactions.
 
-## 3. Code Conventions and Architecture
+## 3. Keyboard Shortcuts
+
+| macOS | Windows/Linux | Description |
+| --- | --- | --- |
+| `Command+F` | `Ctrl+F` | Open or close Find in Page. |
+| `Command+G` | `Ctrl+G` | Open the panel if needed, run any pending search, and move to the next result. |
+| `Command+Shift+G` | `Ctrl+Shift+G` | Open the panel if needed, run any pending search, and move to the previous result. |
+| `Command+E` | `Ctrl+E` | While the panel is open, search for the text currently selected on the page. |
+| `Enter` | `Enter` | Run a pending search or move to the next result while the search field is focused. |
+| `Arrow Up` / `Arrow Down` | `Arrow Up` / `Arrow Down` | Move to the previous or next result while the panel is focused. |
+| `Escape` | `Escape` | Close Search options first when open; otherwise close the panel. |
+
+## 4. Code Conventions and Architecture
 
 ### Directory Structure
 
@@ -28,9 +40,11 @@
 - `entrypoints/content/App.tsx`: React UI, interactions, and state management for the search panel.
 - `entrypoints/content/search.ts`: Cancellable batched traversal, block text-flow construction, result excerpts, selection resolution, precise scrolling, text-control mirrors, and per-document native/fallback highlighting.
 - `entrypoints/content/search-options.ts`: Search-option defaults, validation, and extension storage adapter. Preferences are loaded when a page initializes and saved globally with `browser.storage.local`.
+- `entrypoints/options/`: Localized extension settings page. It owns the language selector and about information, but shares locale resolution and persistence with the content UI.
 - `components/ui/`: Locally maintained Shadcn/Base UI primitives.
 - `assets/tailwind.css`: Tailwind entrypoint, theme tokens, and extension panel styles.
-- `lib/`: Shared stateless utility functions.
+- `lib/i18n.ts`: Shared English, Simplified Chinese, Traditional Chinese, Japanese, and Korean message catalogs plus locale detection, interpolation, and persistence helpers.
+- `lib/`: Other shared stateless utility functions.
 - `public/`: Extension icons and other static assets.
 
 ### Coding Conventions
@@ -54,10 +68,13 @@
 - Literal queries must escape regular-expression metacharacters. Regular-expression queries are raw JavaScript patterns without `/pattern/flags`; global and Unicode matching are always enabled, while `caseSensitive` controls the `i` flag. Invalid expressions must clear stale results and highlights and return the structured search error. Zero-length matches must not produce results.
 - Whole-word matching treats Unicode letters, Unicode numbers, and underscores as word characters and applies the boundary rule to the complete literal or regular-expression match. Matching may bridge adjacent text nodes in one visible block, but must not bridge blocks, explicit line breaks, iframe documents, Shadow Roots, or controls.
 - Only search-option booleans are persisted. Queries remain per-tab and in memory. Other already-open pages do not receive live storage updates; they read the latest options only when initialized or refreshed.
+- Locale preference is stored separately under `findinpage.locale`. Keep panel and settings-page copy in the shared catalogs, preserve the `auto` browser-language mode, and propagate storage changes to already-open content UIs without rerunning the current search.
 - Keep the compact `Aa` Search options trigger inside the input wrapper. Its popover must portal into the fixed search panel, remain interactive with `pointer-events: auto`, stay open while multiple options are changed, and restore focus to the input without selecting its text when dismissed.
+- Clicking a search result must restore focus to the search input without selecting or changing the query, including when the host page had focus before the click. Use focus restoration that prevents scrolling so result selection and page positioning remain unchanged.
 - UI changes must be verified in narrow viewports, light and dark themes, keyboard navigation, focus restoration, and `prefers-reduced-motion` mode.
 - On narrow mobile viewports, keep focusable text inputs at a computed font size of at least `16px` to prevent browser focus zoom. Verify that opening, closing, and reopening the panel does not change the host page width or introduce horizontal scrolling.
 - Do not interfere with the host page when the extension is inactive. Closing the panel must restore focus and hide highlights, while the extension host remains transparent and only the panel receives pointer events.
+- Closing the panel must retain the in-memory query, current results, active result, result-list scroll position, and last search signature. Reopening with the same query and options must only restore highlights with scrolling disabled: it must not rerun or resume the search, select a different result, or change the host page's current scroll position. A new search should run only after the query or search options change.
 
 ### Search And Batching
 
@@ -79,13 +96,13 @@
 - Selecting a control result must update the real control selection when supported, scroll the control into the page viewport, scroll its internal content to reveal the match, and update the active mirror mark. Mirror cleanup must remove every listener and node without changing the control's value, inline styles, focus, or form behavior.
 - Do not copy Findr's strategy of hiding the real control and replacing it with a contenteditable div unless the product explicitly accepts broken control identity, framework bindings, validation, events, focus, selection, and edit synchronization. The retained-control mirror is the required default architecture.
 
-## 4. Guidelines for AI Coding Agents
+## 5. Guidelines for AI Coding Agents
 
 - Read the relevant entrypoints and `README.md` before making changes. Keep implementations aligned with the current MVP scope.
 - Do not introduce dependencies that are not declared in `package.json`, especially large dependencies for simple utilities. If a new dependency is necessary, first explain its purpose, bundle-size impact, and maintenance cost.
 - When adding a Shadcn component, add only the component required for the current feature with `pnpm dlx shadcn@latest add <component>`, then check that the generated code matches the existing Base UI style.
 - When fixing search behavior, prioritize edge cases involving empty queries, multiple matches, cancellation, dynamic DOM changes, invisible nodes, stale ranges, text-control values, cross-realm nodes, nested iframes, and overflow containers.
 - Run `pnpm test` for search and highlight changes in addition to the compile and build checks.
-- After code changes, run `pnpm compile` and `pnpm build`. For interaction changes, also manually verify `Cmd/Ctrl+F`, `Escape`, arrow-key navigation, navigation buttons, the toolbar icon, and dynamic page updates on a regular HTTP or HTTPS page.
+- After code changes, run `pnpm compile` and `pnpm build`. For interaction changes, also manually verify `Cmd/Ctrl+F`, `Cmd/Ctrl+G`, `Cmd/Ctrl+Shift+G`, `Cmd/Ctrl+E`, `Escape`, arrow-key navigation, navigation buttons, the toolbar icon, and dynamic page updates on a regular HTTP or HTTPS page.
 - Every implementation update to `findinpage-ext` must also update the website demo, even when the change is not expected to affect the demo bundle. Run `pnpm build:demo`, copy `dist/demo/findinpage-demo.js` into the sibling `findinpage-web` repository at `vendor/findinpage-demo/findinpage-demo.js`, update `findinpage-web/demo-artifact.lock.json` with the artifact's SHA-256 hash, then run `pnpm prepare:demo` and `pnpm build` in `findinpage-web`. Documentation-only and repository-metadata-only changes are exempt.
 - Do not modify files unrelated to the current task, and do not overwrite existing uncommitted user changes.
