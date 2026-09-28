@@ -5,6 +5,8 @@ find-in-page interaction with a compact list of every match and its surrounding
 context. It keeps the familiar `Command+F` / `Ctrl+F` shortcut while making it
 easier to scan a page and jump directly to the result you need.
 
+![Find in Page showing every match with its surrounding context](docs/find-in-page-overview.png)
+
 - Website: [findin.page](https://findin.page)
 - Chrome Web Store: [Install Find in Page](https://chromewebstore.google.com/detail/ghgneafbinoihjfpmcdglhmoieekmnji)
 - Source: [github.com/findinpage/findinpage-ext](https://github.com/findinpage/findinpage-ext)
