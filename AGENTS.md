@@ -56,6 +56,7 @@
 - Only search-option booleans are persisted. Queries remain per-tab and in memory. Other already-open pages do not receive live storage updates; they read the latest options only when initialized or refreshed.
 - Keep the compact `Aa` Search options trigger inside the input wrapper. Its popover must portal into the fixed search panel, remain interactive with `pointer-events: auto`, stay open while multiple options are changed, and restore focus to the input without selecting its text when dismissed.
 - UI changes must be verified in narrow viewports, light and dark themes, keyboard navigation, focus restoration, and `prefers-reduced-motion` mode.
+- On narrow mobile viewports, keep focusable text inputs at a computed font size of at least `16px` to prevent browser focus zoom. Verify that opening, closing, and reopening the panel does not change the host page width or introduce horizontal scrolling.
 - Do not interfere with the host page when the extension is inactive. Closing the panel must restore focus and hide highlights, while the extension host remains transparent and only the panel receives pointer events.
 
 ### Search And Batching
