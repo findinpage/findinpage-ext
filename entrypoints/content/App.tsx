@@ -28,13 +28,18 @@ import type { SearchOptionsStore } from './search-options';
 export interface FindInPageHandle {
   openAndFocus(): void;
   navigate(direction: -1 | 1): void;
-  search(text: string): void;
+  search(selection: SearchSelectionRequest): void;
   toggle(): void;
   close(): void;
   focus(): void;
   isOpen(): boolean;
   closeTransient(): boolean;
   destroy(): void;
+}
+
+export interface SearchSelectionRequest {
+  text: string;
+  range: Range;
 }
 
 interface AppProps {
@@ -83,7 +88,7 @@ export function App({
   const highlightFrameRef = useRef<number | undefined>(undefined);
   const searchTaskIdRef = useRef<number | undefined>(undefined);
   const navigateShortcutRef = useRef<(direction: -1 | 1) => void>(() => {});
-  const searchTextRef = useRef<(text: string) => void>(() => {});
+  const searchSelectionRef = useRef<(selection: SearchSelectionRequest) => void>(() => {});
   const resultVirtualizer = useVirtualizer({
     count: results.length,
     getScrollElement: () => resultsRef.current,
@@ -188,8 +193,8 @@ export function App({
       navigate(direction) {
         navigateShortcutRef.current(direction);
       },
-      search(text) {
-        searchTextRef.current(text);
+      search(selection) {
+        searchSelectionRef.current(selection);
       },
       toggle() {
         if (isOpenRef.current) close();
@@ -225,6 +230,7 @@ export function App({
       navigateOnComplete?: -1 | 1,
       nextQuery = query,
       nextSearchOptions = searchOptions,
+      selectedRange?: Range,
     ) => {
       const selectionAnchor =
         preservePosition && activeId
@@ -233,6 +239,9 @@ export function App({
       if (preservePosition) {
         pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
       }
+      const rangeSelectionAnchor = selectedRange
+        ? searchRef.current.captureRangeSelection(selectedRange)
+        : undefined;
 
       lastSearchSignatureRef.current = JSON.stringify([nextQuery, nextSearchOptions]);
       setIsSearching(nextQuery.length > 0);
@@ -249,7 +258,14 @@ export function App({
         const resolvedId = selectionAnchor
           ? searchRef.current.resolveSelection(selectionAnchor)
           : undefined;
-        const nextResult = navigateOnComplete
+        const selectedRangeId = rangeSelectionAnchor && response.complete
+          ? searchRef.current.resolveRangeSelection(rangeSelectionAnchor)
+          : undefined;
+        const nextResult = rangeSelectionAnchor
+          ? response.complete
+            ? response.results.find((result) => result.id === selectedRangeId) ?? response.results[0]
+            : undefined
+          : navigateOnComplete
           ? response.complete
             ? response.results[navigateOnComplete === 1 ? 0 : response.results.length - 1]
             : undefined
@@ -259,9 +275,11 @@ export function App({
         if (!selectedInitialResult && nextResult) {
           selectedInitialResult = true;
           selectedResultId = nextResult.id;
-          if (!preservePosition) suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
+          if (!preservePosition && !rangeSelectionAnchor) suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
           setActiveId(
-            searchRef.current.select(nextResult.id, { scroll: !preservePosition })
+            searchRef.current.select(nextResult.id, {
+              scroll: !preservePosition && !rangeSelectionAnchor,
+            })
               ? nextResult.id
               : undefined,
           );
@@ -425,9 +443,9 @@ export function App({
     navigateResult(direction);
   };
 
-  searchTextRef.current = (text) => {
-    setQuery(text);
-    runSearch(false, undefined, text);
+  searchSelectionRef.current = (selection) => {
+    setQuery(selection.text);
+    runSearch(false, undefined, selection.text, searchOptions, selection.range);
     focusInput();
   };
 

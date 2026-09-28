@@ -1,6 +1,10 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { App, type FindInPageHandle } from '@/entrypoints/content/App';
+import {
+  App,
+  type FindInPageHandle,
+  type SearchSelectionRequest,
+} from '@/entrypoints/content/App';
 import {
   normalizeSearchOptions,
   SEARCH_OPTIONS_STORAGE_KEY,
@@ -20,7 +24,7 @@ export interface FindInPageDemoOptions {
 export interface FindInPageDemoHandle {
   open(): void;
   navigate(direction: -1 | 1): void;
-  search(text: string): void;
+  search(selection: SearchSelectionRequest): void;
   close(): void;
   focus(): void;
   isOpen(): boolean;
@@ -167,9 +171,9 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
         navigateWhenReady = direction;
       }
     },
-    search(text) {
+    search(selection) {
       if (destroyed || !appHandle?.isOpen()) return;
-      appHandle.search(text);
+      appHandle.search(selection);
     },
     close() {
       appHandle?.close();

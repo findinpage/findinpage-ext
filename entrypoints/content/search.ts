@@ -104,6 +104,15 @@ interface SelectionAnchor {
   sourceText: string;
 }
 
+export interface RangeSelectionAnchor {
+  document: Document;
+  startContainer: Node;
+  startOffset: number;
+  endContainer: Node;
+  endOffset: number;
+  rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>;
+}
+
 type HighlightRegistry = {
   delete(name: string): void;
   get(name: string): Highlight | undefined;
@@ -522,6 +531,45 @@ export class PageSearch {
       signature: location.signature,
       sourceText: location.sourceText,
     };
+  }
+
+  captureRangeSelection(range: Range): RangeSelectionAnchor {
+    const rect = range.getBoundingClientRect();
+    return {
+      document: range.startContainer.ownerDocument ?? document,
+      startContainer: range.startContainer,
+      startOffset: range.startOffset,
+      endContainer: range.endContainer,
+      endOffset: range.endOffset,
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      },
+    };
+  }
+
+  resolveRangeSelection(anchor: RangeSelectionAnchor): string | undefined {
+    const entries = [...this.locations.entries()].filter(
+      (entry): entry is [string, MatchLocation & { range: Range }] =>
+        entry[1].document === anchor.document && Boolean(entry[1].range),
+    );
+    const exact = entries.find(([, location]) =>
+      location.range.startContainer === anchor.startContainer &&
+      location.range.startOffset === anchor.startOffset &&
+      location.range.endContainer === anchor.endContainer &&
+      location.range.endOffset === anchor.endOffset);
+    if (exact) return exact[0];
+
+    const tolerance = 1;
+    return entries.find(([, location]) => {
+      const rect = location.range.getBoundingClientRect();
+      return Math.abs(rect.left - anchor.rect.left) <= tolerance &&
+        Math.abs(rect.top - anchor.rect.top) <= tolerance &&
+        Math.abs(rect.right - anchor.rect.right) <= tolerance &&
+        Math.abs(rect.bottom - anchor.rect.bottom) <= tolerance;
+    })?.[0];
   }
 
   resolveSelection(anchor: SelectionAnchor): string | undefined {

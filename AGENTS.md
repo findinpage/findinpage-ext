@@ -26,7 +26,7 @@
 | `Command+F` | `Ctrl+F` | Open or close Find in Page. |
 | `Command+G` | `Ctrl+G` | Open the panel if needed, run any pending search, and move to the next result. |
 | `Command+Shift+G` | `Ctrl+Shift+G` | Open the panel if needed, run any pending search, and move to the previous result. |
-| `Command+E` | `Ctrl+E` | While the panel is open, search for the text currently selected on the page. |
+| `Command+E` | `Ctrl+E` | While the panel is open, search for text selected on the page and activate that occurrence without scrolling the page. |
 | `Enter` | `Enter` | Run a pending search or move to the next result while the search field is focused. |
 | `Arrow Up` / `Arrow Down` | `Arrow Up` / `Arrow Down` | Move to the previous or next result while the panel is focused. |
 | `Escape` | `Escape` | Close Search options first when open; otherwise close the panel. |
@@ -63,6 +63,7 @@
 - The host page may mutate its DOM at any time. When retaining references to page nodes, ranges, or elements, continue checking `isConnected` and handle stale search results safely.
 - DOM constructors, ranges, computed styles, highlights, and observers used inside iframes must come from the node's owning `document` or `window`; cross-realm `instanceof` checks and top-level-only registries are not reliable.
 - Result navigation must use instant scrolling. Scroll precise text ranges through their overflow ancestors, then scroll each containing iframe from the innermost document to the top-level page.
+- Selection search must activate the result corresponding to the captured page range and scroll only the extension's result list. It must not scroll the host page, iframe, or page-owned overflow containers; if the range cannot be resolved, activate the first result without page scrolling.
 - Clean up global event listeners, `MutationObserver` instances, media-query listeners, and runtime message listeners when the WXT context is invalidated.
 - Search defaults to case-insensitive literal matching. `PageSearch.search` must receive the complete `SearchOptions` object and preserve arbitrary combinations of `caseSensitive`, `wholeWord`, and `useRegularExpression`.
 - Literal queries must escape regular-expression metacharacters. Regular-expression queries are raw JavaScript patterns without `/pattern/flags`; global and Unicode matching are always enabled, while `caseSensitive` controls the `i` flag. Invalid expressions must clear stale results and highlights and return the structured search error. Zero-length matches must not produce results.

@@ -160,9 +160,16 @@ describe('App close and reopen', () => {
 
   it('fills the input and immediately searches selected page text', () => {
     const search = mockSearch(true);
+    const resolveRangeSelection = vi
+      .spyOn(PageSearch.prototype, 'resolveRangeSelection')
+      .mockReturnValue('result-3');
     renderAndOpen();
+    const selectedNode = document.createTextNode('selected text');
+    document.body.append(selectedNode);
+    const range = document.createRange();
+    range.selectNodeContents(selectedNode);
 
-    act(() => handle.search('selected text'));
+    act(() => handle.search({ text: 'selected text', range }));
 
     expect(search).toHaveBeenCalledTimes(2);
     expect(search).toHaveBeenLastCalledWith(
@@ -172,6 +179,29 @@ describe('App close and reopen', () => {
     );
     expect(container.querySelector<HTMLInputElement>('.findinpage-input')?.value)
       .toBe('selected text');
+    expect(resolveRangeSelection).toHaveBeenCalled();
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith(
+      'result-3',
+      { scroll: false },
+    );
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+  });
+
+  it('falls back to the first result without page scrolling when a selection cannot be resolved', () => {
+    mockSearch(true);
+    vi.spyOn(PageSearch.prototype, 'resolveRangeSelection').mockReturnValue(undefined);
+    renderAndOpen();
+    const selectedNode = document.createTextNode('selected text');
+    document.body.append(selectedNode);
+    const range = document.createRange();
+    range.selectNodeContents(selectedNode);
+
+    act(() => handle.search({ text: 'selected text', range }));
+
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith(
+      'result-1',
+      { scroll: false },
+    );
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
   });
 });

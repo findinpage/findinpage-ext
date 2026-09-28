@@ -180,12 +180,13 @@ export default defineContentScript({
         event.key.toLowerCase() === 'e';
 
       if (!isSearchSelectionShortcut || !appHandle?.isOpen()) return;
-      const selectedText = window.getSelection()?.toString().trim() ?? '';
-      if (!selectedText) return;
+      const selection = window.getSelection();
+      const selectedText = selection?.toString() ?? '';
+      if (!selectedText.trim() || !selection?.rangeCount) return;
 
       event.preventDefault();
       event.stopImmediatePropagation();
-      appHandle.search(selectedText);
+      appHandle.search({ text: selectedText, range: selection.getRangeAt(0).cloneRange() });
     };
 
     const onGlobalKeyDown = (event: KeyboardEvent) => {

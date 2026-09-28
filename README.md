@@ -64,10 +64,14 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 | `Command+F` | `Ctrl+F` | Open or close Find in Page. |
 | `Command+G` | `Ctrl+G` | Open the panel if needed, run any pending search, and move to the next result. |
 | `Command+Shift+G` | `Ctrl+Shift+G` | Open the panel if needed, run any pending search, and move to the previous result. |
-| `Command+E` | `Ctrl+E` | While the panel is open, search for the text currently selected on the page. |
+| `Command+E` | `Ctrl+E` | While the panel is open, search for text selected on the page and activate that occurrence without scrolling the page. |
 | `Enter` | `Enter` | Run a pending search or move to the next result while the search field is focused. |
 | `Arrow Up` / `Arrow Down` | `Arrow Up` / `Arrow Down` | Move to the previous or next result while the panel is focused. |
 | `Escape` | `Escape` | Close Search options first when open; otherwise close the panel. |
+
+The public website mirrors this reference in every supported locale. Shortcut
+behavior and descriptions must remain consistent across the extension, demo,
+and website.
 
 > **Using the browser's built-in find:** while Find in Page is enabled, pressing
 > `Command+F` or `Ctrl+F` with the page focused opens Find in Page. To use the

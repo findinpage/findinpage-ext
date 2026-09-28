@@ -128,6 +128,21 @@ describe('PageSearch', () => {
     expect(registry.has(ACTIVE_HIGHLIGHT_NAME)).toBe(true);
   });
 
+  it('resolves the exact repeated match selected on the page', async () => {
+    document.body.innerHTML = '<p>for for <strong>for</strong> for</p>';
+    const strongText = document.querySelector('strong')!.firstChild!;
+    const selectedRange = document.createRange();
+    selectedRange.selectNodeContents(strongText);
+    const anchor = pageSearch.captureRangeSelection(selectedRange);
+
+    const { response } = await search(pageSearch, 'for');
+
+    expect(response.results).toHaveLength(4);
+    expect(pageSearch.resolveRangeSelection(anchor)).toBe(response.results[2].id);
+    expect(pageSearch.select(response.results[2].id, { scroll: false })).toBe(true);
+    expect(window.scrollBy).not.toHaveBeenCalled();
+  });
+
   it('does not horizontally center a match that is already visible in the viewport', async () => {
     document.body.innerHTML = '<p>needle</p>';
     vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue({
