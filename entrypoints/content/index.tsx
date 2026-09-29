@@ -24,6 +24,13 @@ import {
   type SearchSessionPatch,
   type SearchSessionResponse,
 } from '@/lib/search-session';
+import {
+  loadThemePreference,
+  normalizeThemePreference,
+  resolveColorScheme,
+  THEME_STORAGE_KEY,
+  type ThemePreference,
+} from '@/lib/theme';
 
 type MountedUi = {
   root: Root;
@@ -112,45 +119,34 @@ export default defineContentScript({
     const initialStatePromise = Promise.all([
       loadSearchSession(),
       extensionSearchOptionsStore.load(),
+      loadThemePreference(),
     ]);
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    let themePreference: ThemePreference = 'system';
 
     if (location.origin === 'https://findin.page') {
       document.documentElement.dataset.findinpageExtension = '1';
       document.dispatchEvent(new CustomEvent('findinpage:extension-ready'));
     }
 
-    const resolveColorScheme = (): 'light' | 'dark' => {
-      const root = document.documentElement;
-      const declaredScheme = root.style.colorScheme;
-
-      if (
-        declaredScheme === 'dark' ||
-        root.classList.contains('dark') ||
-        root.dataset.theme === 'dark'
-      ) {
-        return 'dark';
-      }
-      if (
-        declaredScheme === 'light' ||
-        root.classList.contains('light') ||
-        root.dataset.theme === 'light'
-      ) {
-        return 'light';
-      }
-      return systemColorScheme.matches ? 'dark' : 'light';
-    };
-
     const syncColorScheme = () => {
-      shadowHostElement?.setAttribute('data-findinpage-color-scheme', resolveColorScheme());
+      shadowHostElement?.setAttribute(
+        'data-findinpage-color-scheme',
+        resolveColorScheme(themePreference, systemColorScheme.matches),
+      );
     };
 
-    const themeObserver = new MutationObserver(syncColorScheme);
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'style', 'data-theme'],
-    });
+    const onThemeStorageChange = (
+      changes: Record<string, Browser.storage.StorageChange>,
+      areaName: string,
+    ) => {
+      if (areaName !== 'local' || !changes[THEME_STORAGE_KEY]) return;
+      themePreference = normalizeThemePreference(changes[THEME_STORAGE_KEY].newValue);
+      syncColorScheme();
+    };
+
     systemColorScheme.addEventListener('change', syncColorScheme);
+    browser.storage.onChanged.addListener(onThemeStorageChange);
 
     const onFindShortcut = (event: KeyboardEvent) => {
       const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
@@ -273,11 +269,12 @@ export default defineContentScript({
       window.removeEventListener('focus', keepFindInPageFocused, { capture: true });
       window.removeEventListener('focusin', keepFindInPageFocused, { capture: true });
       browser.runtime.onMessage.removeListener(onMessage);
-      themeObserver.disconnect();
       systemColorScheme.removeEventListener('change', syncColorScheme);
+      browser.storage.onChanged.removeListener(onThemeStorageChange);
     });
 
-    const [savedSession, globalSearchOptions] = await initialStatePromise;
+    const [savedSession, globalSearchOptions, savedThemePreference] = await initialStatePromise;
+    themePreference = savedThemePreference;
     const restoreSamePage = Boolean(
       savedSession?.isOpen &&
       savedSession.searchUrl &&
