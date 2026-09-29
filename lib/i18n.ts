@@ -51,6 +51,9 @@ const en = {
   themeLight: 'Light',
   themeDark: 'Dark',
   themeHelp: 'Choose a theme for Find in Page across every website.',
+  behaviorHeading: 'Search behavior',
+  keepHighlightsOnClose: 'Keep results highlighted after closing',
+  keepHighlightsOnCloseHelp: 'Leave the current matches highlighted when the Find in Page panel is closed.',
   aboutHeading: 'About',
   rateExtension: 'Rate this extension',
   website: 'Official website',
@@ -79,6 +82,8 @@ const catalogs: Record<SupportedLocale, Messages> = {
     languageHelp: '更改会立即应用到所有已打开标签页中的 Find in Page。', saved: '已保存',
     themeHeading: '主题', themeLabel: '外观', themeSystem: '跟随系统', themeLight: '浅色',
     themeDark: '深色', themeHelp: '选择 Find in Page 在所有网站中使用的主题。',
+    behaviorHeading: '搜索行为', keepHighlightsOnClose: '关闭后保留搜索结果高亮',
+    keepHighlightsOnCloseHelp: '关闭 Find in Page 搜索面板后，继续高亮当前匹配结果。',
     aboutHeading: '关于', rateExtension: '为扩展评分', website: '官方网站', version: '版本', contact: '联系支持',
   },
   'zh-TW': {
@@ -97,6 +102,8 @@ const catalogs: Record<SupportedLocale, Messages> = {
     languageHelp: '變更會立即套用至所有已開啟分頁中的 Find in Page。', saved: '已儲存',
     themeHeading: '主題', themeLabel: '外觀', themeSystem: '跟隨系統', themeLight: '淺色',
     themeDark: '深色', themeHelp: '選擇 Find in Page 在所有網站中使用的主題。',
+    behaviorHeading: '搜尋行為', keepHighlightsOnClose: '關閉後保留搜尋結果高亮',
+    keepHighlightsOnCloseHelp: '關閉 Find in Page 搜尋面板後，繼續高亮目前的相符結果。',
     aboutHeading: '關於', rateExtension: '為擴充功能評分', website: '官方網站', version: '版本', contact: '聯絡支援',
   },
   ja: {
@@ -115,6 +122,8 @@ const catalogs: Record<SupportedLocale, Messages> = {
     languageHelp: '変更は開いているすべてのタブの Find in Page にすぐ反映されます。', saved: '保存しました',
     themeHeading: 'テーマ', themeLabel: '外観', themeSystem: 'システム', themeLight: 'ライト',
     themeDark: 'ダーク', themeHelp: 'すべてのウェブサイトで使用する Find in Page のテーマを選択します。',
+    behaviorHeading: '検索動作', keepHighlightsOnClose: '閉じた後も検索結果をハイライトする',
+    keepHighlightsOnCloseHelp: 'Find in Page パネルを閉じても、現在の一致箇所をハイライトしたままにします。',
     aboutHeading: '情報', rateExtension: '拡張機能を評価', website: '公式ウェブサイト', version: 'バージョン', contact: 'サポートに連絡',
   },
   ko: {
@@ -133,6 +142,8 @@ const catalogs: Record<SupportedLocale, Messages> = {
     languageHelp: '변경 사항은 열려 있는 모든 탭의 Find in Page에 즉시 적용됩니다.', saved: '저장됨',
     themeHeading: '테마', themeLabel: '모양', themeSystem: '시스템', themeLight: '라이트',
     themeDark: '다크', themeHelp: '모든 웹사이트에서 사용할 Find in Page 테마를 선택하세요.',
+    behaviorHeading: '검색 동작', keepHighlightsOnClose: '닫은 후에도 검색 결과 강조 표시 유지',
+    keepHighlightsOnCloseHelp: 'Find in Page 패널을 닫아도 현재 일치 항목의 강조 표시를 유지합니다.',
     aboutHeading: '정보', rateExtension: '확장 프로그램 평가', website: '공식 웹사이트', version: '버전', contact: '지원팀에 문의',
   },
 };

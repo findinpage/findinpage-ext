@@ -34,8 +34,8 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   words, use a regular expression, or combine all three behaviors. Preferences
   are retained across pages and browser sessions.
 - **Clear page highlights:** all matches are highlighted on the page, with the
-  active match shown in a distinct style. Highlights disappear when the panel
-  closes.
+  active match shown in a distinct style. By default highlights disappear when
+  the panel closes; an extension setting can keep them visible.
 - **Form-field search:** visible text, search, email, telephone, and URL inputs,
   plus textareas, are searched without replacing the original controls. A
   synchronized mirror shows every match inside each control.
@@ -59,6 +59,14 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
   keyboard navigation without tabbing through every match.
 - **Local and private:** searches run entirely in the current tab. Page text and
   queries are never sent over the network.
+
+## Settings
+
+Open the extension's settings page to choose its display language, light or dark
+theme, and search behavior. **Keep results highlighted after closing** leaves
+the current matches and active result highlighted when the panel closes. It is
+off by default, and changes apply immediately to every open tab. The preference
+does not store the query, results, or page content.
 
 ## Keyboard shortcuts
 

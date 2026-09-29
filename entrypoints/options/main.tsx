@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ExternalLink,
   Globe2,
+  Highlighter,
   Mail,
   Monitor,
   Moon,
@@ -27,6 +28,10 @@ import {
   saveThemePreference,
   type ThemePreference,
 } from '@/lib/theme';
+import {
+  loadKeepHighlightsOnClose,
+  saveKeepHighlightsOnClose,
+} from '@/lib/highlight-preference';
 import './style.css';
 
 const CHROME_REVIEW_URL = 'https://chromewebstore.google.com/detail/find-in-page/ghgneafbinoihjfpmcdglhmoieekmnji/reviews';
@@ -34,8 +39,9 @@ const CHROME_REVIEW_URL = 'https://chromewebstore.google.com/detail/find-in-page
 function OptionsApp() {
   const [preference, setPreference] = useState<LocalePreference>('auto');
   const [themePreference, setThemePreference] = useState<ThemePreference>('system');
+  const [keepHighlightsOnClose, setKeepHighlightsOnClose] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [savedSetting, setSavedSetting] = useState<'language' | 'theme' | null>(null);
+  const [savedSetting, setSavedSetting] = useState<'language' | 'theme' | 'behavior' | null>(null);
   const locale = getEffectiveLocale(preference);
   const t = useMemo(() => (
     key: Parameters<typeof translate>[1],
@@ -44,9 +50,14 @@ function OptionsApp() {
   const version = browser.runtime?.getManifest?.().version ?? '—';
 
   useEffect(() => {
-    void Promise.all([loadLocalePreference(), loadThemePreference()]).then(([localeValue, themeValue]) => {
+    void Promise.all([
+      loadLocalePreference(),
+      loadThemePreference(),
+      loadKeepHighlightsOnClose(),
+    ]).then(([localeValue, themeValue, keepHighlights]) => {
       setPreference(localeValue);
       setThemePreference(themeValue);
+      setKeepHighlightsOnClose(keepHighlights);
       setLoaded(true);
     });
   }, []);
@@ -81,6 +92,14 @@ function OptionsApp() {
     setSavedSetting(null);
     await saveThemePreference(value);
     setSavedSetting('theme');
+    window.setTimeout(() => setSavedSetting(null), 1600);
+  };
+
+  const updateKeepHighlightsOnClose = async (value: boolean) => {
+    setKeepHighlightsOnClose(value);
+    setSavedSetting(null);
+    await saveKeepHighlightsOnClose(value);
+    setSavedSetting('behavior');
     window.setTimeout(() => setSavedSetting(null), 1600);
   };
 
@@ -154,6 +173,29 @@ function OptionsApp() {
           {savedSetting === 'theme' ? t('saved') : ''}
         </span>
         <p className="help-text">{t('themeHelp')}</p>
+      </section>
+
+      <section className="settings-section" aria-labelledby="behavior-heading">
+        <div className="section-heading">
+          <Highlighter aria-hidden="true" />
+          <h2 id="behavior-heading">{t('behaviorHeading')}</h2>
+        </div>
+        <label className="switch-setting">
+          <span>
+            <strong>{t('keepHighlightsOnClose')}</strong>
+            <small>{t('keepHighlightsOnCloseHelp')}</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={keepHighlightsOnClose}
+            disabled={!loaded}
+            onChange={(event) => void updateKeepHighlightsOnClose(event.target.checked)}
+          />
+          <span className="switch-control" aria-hidden="true" />
+        </label>
+        <span className="saved-status behavior-saved-status" role="status" aria-live="polite">
+          {savedSetting === 'behavior' ? t('saved') : ''}
+        </span>
       </section>
 
       <section className="settings-section" aria-labelledby="about-heading">

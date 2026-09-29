@@ -42,6 +42,18 @@ label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
 select:focus-visible, a:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
 .saved-status { min-width: 60px; color: #15803d; font-size: 13px; }
 .theme-saved-status { display: block; min-height: 16px; margin-top: 7px; }
+.switch-setting { display: flex; width: min(100%, 600px); align-items: center; justify-content: space-between; gap: 24px; margin: 0; cursor: pointer; }
+.switch-setting > span:first-child { min-width: 0; }
+.switch-setting strong { display: block; font-size: 14px; }
+.switch-setting small { display: block; margin-top: 5px; color: #71717a; font-size: 13px; font-weight: 400; line-height: 1.5; }
+.switch-setting input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.switch-control { position: relative; width: 42px; height: 24px; flex: 0 0 auto; border: 1px solid #a1a1aa; border-radius: 999px; background: #d4d4d8; transition: background-color 150ms ease, border-color 150ms ease; }
+.switch-control::after { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 25%); content: ""; transition: transform 150ms ease; }
+.switch-setting input:checked + .switch-control { border-color: #1a73e8; background: #1a73e8; }
+.switch-setting input:checked + .switch-control::after { transform: translateX(18px); }
+.switch-setting input:focus-visible + .switch-control { outline: 3px solid #1a73e8; outline-offset: 2px; }
+.switch-setting input:disabled + .switch-control { cursor: wait; opacity: .65; }
+.behavior-saved-status { display: block; min-height: 16px; margin-top: 7px; }
 .help-text { margin: 8px 0 0; font-size: 13px; line-height: 1.5; }
 .about-list { margin: 0; }
 .about-list > div { display: grid; grid-template-columns: minmax(110px, 0.35fr) 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid #e4e4e7; }
@@ -52,7 +64,7 @@ select:focus-visible, a:focus-visible { outline: 3px solid #1a73e8; outline-offs
 
 :root[data-theme="dark"] { background: #18181b; color: #f4f4f5; }
 :root[data-theme="dark"] {
-  .options-header p, .help-text, .about-list dt { color: #a1a1aa; }
+  .options-header p, .help-text, .about-list dt, .switch-setting small { color: #a1a1aa; }
   .settings-section { border-color: #3f3f46; }
   .language-select select { background: #27272a; color: #f4f4f5; border-color: #52525b; }
   .language-select > svg { color: #d4d4d8; }
@@ -62,6 +74,12 @@ select:focus-visible, a:focus-visible { outline: 3px solid #1a73e8; outline-offs
   .about-list > div { border-color: #3f3f46; }
   .about-list a { color: #8ab4f8; }
   .saved-status { color: #86efac; }
+  .switch-control { border-color: #71717a; background: #52525b; }
+  .switch-setting input:checked + .switch-control { border-color: #8ab4f8; background: #8ab4f8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-control, .switch-control::after { transition: none; }
 }
 
 @media (max-width: 480px) {

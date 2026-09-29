@@ -53,11 +53,12 @@ describe('App close and reopen', () => {
     });
   }
 
-  function renderAndOpen() {
+  function renderAndOpen(keepHighlightsOnClose = false) {
     act(() => {
       root.render(
         <App
           initialQuery="needle"
+          keepHighlightsOnClose={keepHighlightsOnClose}
           onReady={(readyHandle) => {
             handle = readyHandle;
           }}
@@ -71,6 +72,84 @@ describe('App close and reopen', () => {
       vi.advanceTimersByTime(120);
     });
   }
+
+  it('hides highlights when closed by default', () => {
+    mockSearch(true);
+    const hideHighlights = vi.spyOn(PageSearch.prototype, 'hideHighlights');
+    renderAndOpen();
+    hideHighlights.mockClear();
+
+    act(() => {
+      handle.close();
+      vi.runAllTimers();
+    });
+
+    expect(hideHighlights).toHaveBeenCalled();
+  });
+
+  it('keeps highlights visible when the preference is enabled', () => {
+    mockSearch(true);
+    const hideHighlights = vi.spyOn(PageSearch.prototype, 'hideHighlights');
+    renderAndOpen(true);
+    hideHighlights.mockClear();
+
+    act(() => {
+      handle.close();
+      vi.runAllTimers();
+    });
+
+    expect(hideHighlights).not.toHaveBeenCalled();
+  });
+
+  it('updates retained highlights immediately while the panel is closed', () => {
+    mockSearch(true);
+    const hideHighlights = vi.spyOn(PageSearch.prototype, 'hideHighlights');
+    const restoreHighlights = vi.spyOn(PageSearch.prototype, 'restoreHighlights');
+    const onReady = (readyHandle: FindInPageHandle) => {
+      handle = readyHandle;
+    };
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          keepHighlightsOnClose
+          onReady={onReady}
+        />,
+      );
+    });
+    act(() => {
+      handle.openAndFocus();
+      vi.advanceTimersByTime(120);
+      handle.close();
+    });
+    hideHighlights.mockClear();
+    restoreHighlights.mockClear();
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          keepHighlightsOnClose={false}
+          onReady={onReady}
+        />,
+      );
+    });
+    expect(hideHighlights).toHaveBeenCalled();
+
+    hideHighlights.mockClear();
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          keepHighlightsOnClose
+          onReady={onReady}
+        />,
+      );
+    });
+    expect(restoreHighlights).toHaveBeenCalled();
+    expect(hideHighlights).not.toHaveBeenCalled();
+  });
 
   it('keeps the active result and current page position without searching again', () => {
     const search = mockSearch(true);

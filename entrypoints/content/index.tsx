@@ -31,6 +31,11 @@ import {
   THEME_STORAGE_KEY,
   type ThemePreference,
 } from '@/lib/theme';
+import {
+  KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY,
+  loadKeepHighlightsOnClose,
+  normalizeKeepHighlightsOnClose,
+} from '@/lib/highlight-preference';
 
 type MountedUi = {
   root: Root;
@@ -79,8 +84,16 @@ function updateSearchSession(patch: SearchSessionPatch): void {
   }).catch(() => undefined);
 }
 
-function LocalizedApp(props: Omit<React.ComponentProps<typeof App>, 'locale'>) {
+function LocalizedApp({
+  initialKeepHighlightsOnClose,
+  ...props
+}: Omit<React.ComponentProps<typeof App>, 'locale' | 'keepHighlightsOnClose'> & {
+  initialKeepHighlightsOnClose: boolean;
+}) {
   const [locale, setLocale] = useState<SupportedLocale>(getBrowserLocale());
+  const [keepHighlightsOnClose, setKeepHighlightsOnClose] = useState(
+    initialKeepHighlightsOnClose,
+  );
 
   useEffect(() => {
     let active = true;
@@ -91,8 +104,15 @@ function LocalizedApp(props: Omit<React.ComponentProps<typeof App>, 'locale'>) {
       changes: Record<string, Browser.storage.StorageChange>,
       areaName: string,
     ) => {
-      if (areaName !== 'local' || !changes[LOCALE_STORAGE_KEY]) return;
-      setLocale(getEffectiveLocale(normalizeLocalePreference(changes[LOCALE_STORAGE_KEY].newValue)));
+      if (areaName !== 'local') return;
+      if (changes[LOCALE_STORAGE_KEY]) {
+        setLocale(getEffectiveLocale(normalizeLocalePreference(changes[LOCALE_STORAGE_KEY].newValue)));
+      }
+      if (changes[KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY]) {
+        setKeepHighlightsOnClose(normalizeKeepHighlightsOnClose(
+          changes[KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY].newValue,
+        ));
+      }
     };
     browser.storage.onChanged.addListener(onStorageChange);
     return () => {
@@ -101,7 +121,13 @@ function LocalizedApp(props: Omit<React.ComponentProps<typeof App>, 'locale'>) {
     };
   }, []);
 
-  return <App {...props} locale={locale} />;
+  return (
+    <App
+      {...props}
+      locale={locale}
+      keepHighlightsOnClose={keepHighlightsOnClose}
+    />
+  );
 }
 
 export default defineContentScript({
@@ -120,6 +146,7 @@ export default defineContentScript({
       loadSearchSession(),
       extensionSearchOptionsStore.load(),
       loadThemePreference(),
+      loadKeepHighlightsOnClose(),
     ]);
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
     let themePreference: ThemePreference = 'system';
@@ -273,7 +300,12 @@ export default defineContentScript({
       browser.storage.onChanged.removeListener(onThemeStorageChange);
     });
 
-    const [savedSession, globalSearchOptions, savedThemePreference] = await initialStatePromise;
+    const [
+      savedSession,
+      globalSearchOptions,
+      savedThemePreference,
+      initialKeepHighlightsOnClose,
+    ] = await initialStatePromise;
     themePreference = savedThemePreference;
     const restoreSamePage = Boolean(
       savedSession?.isOpen &&
@@ -313,6 +345,7 @@ export default defineContentScript({
         root.render(
           <React.StrictMode>
             <LocalizedApp
+              initialKeepHighlightsOnClose={initialKeepHighlightsOnClose}
               initialQuery={savedSession?.query ?? ''}
               initialSearchOptions={initialSearchOptions}
               searchOptionsStore={extensionSearchOptionsStore}

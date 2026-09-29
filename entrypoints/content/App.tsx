@@ -62,6 +62,7 @@ interface AppProps {
     onClick(): void;
   };
   searchOptionsStore?: SearchOptionsStore;
+  keepHighlightsOnClose?: boolean;
   locale?: SupportedLocale;
 }
 
@@ -76,6 +77,7 @@ export function App({
   onActiveResultChange,
   installAction,
   searchOptionsStore,
+  keepHighlightsOnClose = false,
   locale = getBrowserLocale(),
 }: AppProps) {
   const t = useCallback(
@@ -193,16 +195,22 @@ export function App({
     searchRef.current.cancelSearch();
     searchTaskIdRef.current = undefined;
     setIsSearching(false);
-    searchRef.current.hideHighlights();
+    if (!keepHighlightsOnClose) searchRef.current.hideHighlights();
     setPanelVisibility(false);
     setIsOpen(false);
     onOpenChange?.(false);
     restoreFocusRef.current?.focus({ preventScroll: true });
     restoreFocusRef.current = null;
     deferHighlightUpdate(() => {
-      if (!isOpenRef.current) searchRef.current.hideHighlights();
+      if (!isOpenRef.current && !keepHighlightsOnClose) searchRef.current.hideHighlights();
     });
-  }, [deferHighlightUpdate, onOpenChange, setPanelVisibility]);
+  }, [deferHighlightUpdate, keepHighlightsOnClose, onOpenChange, setPanelVisibility]);
+
+  useEffect(() => {
+    if (isOpenRef.current) return;
+    if (keepHighlightsOnClose) searchRef.current.restoreHighlights(activeId);
+    else searchRef.current.hideHighlights();
+  }, [activeId, keepHighlightsOnClose]);
 
   useEffect(() => {
     const open = (
