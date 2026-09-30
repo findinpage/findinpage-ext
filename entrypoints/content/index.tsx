@@ -45,6 +45,10 @@ type FindInPageMessage = {
   type: 'TOGGLE_FIND_IN_PAGE';
 };
 
+type FindInPageResponse = {
+  ok: true;
+};
+
 const extensionSearchOptionsStore: SearchOptionsStore = {
   async load() {
     try {
@@ -277,7 +281,11 @@ export default defineContentScript({
     window.addEventListener('focus', keepFindInPageFocused, { capture: true });
     window.addEventListener('focusin', keepFindInPageFocused, { capture: true });
 
-    const onMessage = (message: FindInPageMessage) => {
+    const onMessage = (
+      message: FindInPageMessage,
+      _sender: Browser.runtime.MessageSender,
+      sendResponse: (response: FindInPageResponse) => void,
+    ): true | undefined => {
       if (message.type !== 'TOGGLE_FIND_IN_PAGE') return;
 
       if (appHandle) {
@@ -285,6 +293,8 @@ export default defineContentScript({
       } else {
         openWhenReady = true;
       }
+      sendResponse({ ok: true });
+      return true;
     };
     browser.runtime.onMessage.addListener(onMessage);
 

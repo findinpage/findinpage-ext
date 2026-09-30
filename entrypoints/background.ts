@@ -6,16 +6,41 @@ import {
   type SearchSessionResponse,
 } from '@/lib/search-session';
 
+type FindInPageResponse = {
+  ok: true;
+};
+
 export default defineBackground(() => {
   const updateQueues = new Map<number, Promise<void>>();
 
+  const toggleFindInPage = async (tabId: number) => {
+    const response = await browser.tabs.sendMessage(tabId, {
+      type: 'TOGGLE_FIND_IN_PAGE',
+    }) as FindInPageResponse | undefined;
+    if (!response?.ok) throw new Error('Find in Page content script did not respond.');
+  };
+
   browser.action.onClicked.addListener(async (tab) => {
-    if (!tab.id) return;
+    if (tab.id === undefined) return;
 
     try {
-      await browser.tabs.sendMessage(tab.id, { type: 'TOGGLE_FIND_IN_PAGE' });
+      await toggleFindInPage(tab.id);
     } catch {
-      // Protected browser pages do not allow content-script messaging.
+      try {
+        if (browser.scripting?.executeScript) {
+          await browser.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['/content-scripts/content.js'],
+          });
+        } else {
+          await browser.tabs.executeScript(tab.id, {
+            file: '/content-scripts/content.js',
+          });
+        }
+        await toggleFindInPage(tab.id);
+      } catch {
+        // Protected browser pages do not allow content-script injection or messaging.
+      }
     }
   });
 
