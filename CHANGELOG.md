@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-10-02
+
+### Added
+
+- Added local debug mode with logs covering toolbar, keyboard, UI, search,
+  selection, restoration, refresh, focus, and runtime-message events.
+
+### Fixed
+
+- Fixed toolbar and keyboard activation after refresh or extension-context
+  replacement, including pages that remove the injected panel host.
+- Restored the selected result using surrounding content anchors so dynamic
+  pages return to the intended match instead of relying only on its index.
+- Prevented session restoration from stealing focus or changing the page's
+  scroll position, and kept page content selectable while the panel is open.
+- Serialized dynamic result refreshes and removed redundant load and scroll
+  searches that could leave the panel searching or repeatedly flash highlights.
+
 ## [1.0.1] - 2026-10-01
 
 ### Added
@@ -32,5 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added localized settings, light and dark themes, and per-tab search-session
   restoration across page refreshes.
 
+[1.0.2]: https://github.com/findinpage/findinpage-ext/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/findinpage/findinpage-ext/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/findinpage/findinpage-ext/releases/tag/v1.0.0
