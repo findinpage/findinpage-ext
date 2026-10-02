@@ -87,7 +87,8 @@
 - The results list may update while `complete` is false. Keep the live count and searching state accurate, preserve the active selection during refresh when its anchor can be resolved, and do not impose a hidden match cap.
 - Build one searchable text flow from adjacent visible text nodes in the same block container. Preserve an offset-to-node mapping so a match can become a cross-node `Range`. End a flow at block boundaries, `<br>`, controls, iframe documents, and Shadow Root boundaries.
 - Search visible controls by their current `.value`. Supported inputs are missing/`text`, `search`, `email`, `tel`, and `url`, plus `textarea`; never include `password`, `number`, hidden, button, submit, reset, or other non-text types.
-- Captured `input` and `change` events from supported controls must schedule a debounced refresh. MutationObserver callbacks must ignore nodes owned by the extension's fallback highlighter and control mirrors to prevent self-triggered search loops.
+- Captured `input` and `change` events from supported controls must schedule a refresh. Dynamic refreshes must not repeatedly cancel an in-flight search and leave the UI on an incomplete batch; serialize refresh searches and immediately drain one pending refresh after the active search completes. MutationObserver callbacks must ignore the extension UI, fallback highlighter, and control mirrors to prevent self-triggered search loops.
+- Listen for document completion on the owning `window`, not with a capture-phase `load` listener on `document`; document capture listeners also receive image, script, stylesheet, and iframe resource loads and can cause repeated full searches and highlight flicker.
 
 ### Highlighting And Text Controls
 
@@ -101,6 +102,14 @@
 - Do not copy Findr's strategy of hiding the real control and replacing it with a contenteditable div unless the product explicitly accepts broken control identity, framework bindings, validation, events, focus, selection, and edit synchronization. The retained-control mirror is the required default architecture.
 
 ## 5. Guidelines for AI Coding Agents
+
+### Interaction Observability
+
+- Every UI interaction, keyboard shortcut, runtime message, toolbar action, focus transition, and extension-owned event path must emit a local debug event through the existing debug logging hook. This requirement applies to all future features and controls, not only the current search panel.
+- Keep a root-level capture hook for generic UI events so newly added controls have baseline coverage. Add semantic events at the state-transition or command boundary as well; generic click or keydown records do not replace events such as search started/completed, navigation requested/resolved, selection changed, panel opened/closed, session restored, or refresh queued/drained.
+- Logs must include the operation source and enough state to reconstruct the decision, such as key modifiers, query and search options, result count/index, pending/running state, and relevant target role or accessible label. Never include unrelated page content, credentials, form values, URL query strings/fragments, or transmit logs off-device.
+- Logging is diagnostic and must never change behavior. All logging calls must tolerate disabled storage, extension-context invalidation, teardown, and write failures without blocking UI or event handling.
+- When adding or changing an interaction, add or update tests for both behavior and the important semantic logging hook. Manual verification must use the WXT-launched browser and inspect the options-page debug log for the affected UI, keyboard, toolbar, focus, message, and event paths.
 
 - Read the relevant entrypoints and `README.md` before making changes. Keep implementations aligned with the current MVP scope.
 - Do not introduce dependencies that are not declared in `package.json`, especially large dependencies for simple utilities. If a new dependency is necessary, first explain its purpose, bundle-size impact, and maintenance cost.

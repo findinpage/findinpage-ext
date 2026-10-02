@@ -24,6 +24,28 @@ import {
   type SearchResultView,
 } from './search';
 import type { SearchOptionsStore } from './search-options';
+import type { SearchResultAnchor } from '@/lib/search-session';
+
+function toResultAnchor(result: SearchResultView): SearchResultAnchor {
+  return { before: result.before, match: result.match, after: result.after };
+}
+
+function findAnchoredResult(
+  results: SearchResultView[],
+  anchor: SearchResultAnchor,
+  fallbackIndex?: number | null,
+): SearchResultView | undefined {
+  const matches = results.filter((result) =>
+    result.before === anchor.before &&
+    result.match === anchor.match &&
+    result.after === anchor.after);
+  if (matches.length === 0) return undefined;
+  if (fallbackIndex === null || fallbackIndex === undefined) return matches[0];
+  return matches.reduce((nearest, result) =>
+    Math.abs(results.indexOf(result) - fallbackIndex) < Math.abs(results.indexOf(nearest) - fallbackIndex)
+      ? result
+      : nearest);
+}
 
 export interface FindInPageHandle {
   openAndFocus(query?: string, options?: Partial<SearchOptions>): void;
@@ -31,6 +53,8 @@ export interface FindInPageHandle {
     query: string,
     options: SearchOptions,
     activeResultIndex?: number | null,
+    open?: boolean,
+    activeResultAnchor?: SearchResultAnchor,
   ): void;
   runPendingSearch(): void;
   navigate(direction: -1 | 1): void;
@@ -39,6 +63,7 @@ export interface FindInPageHandle {
   close(): void;
   focus(): void;
   isOpen(): boolean;
+  getDebugState(): Record<string, unknown>;
   closeTransient(): boolean;
   destroy(): void;
 }
@@ -56,7 +81,8 @@ interface AppProps {
   onQueryChange?(query: string, options: SearchOptions): void;
   onSearchOptionsChange?(options: SearchOptions): void;
   onSearchExecuted?(query: string, options: SearchOptions): void;
-  onActiveResultChange?(index: number | undefined): void;
+  onActiveResultChange?(index: number | undefined, anchor?: SearchResultAnchor): void;
+  onDebugEvent?(event: string, details?: Record<string, unknown>): void;
   installAction?: {
     label: string;
     onClick(): void;
@@ -75,6 +101,7 @@ export function App({
   onSearchOptionsChange,
   onSearchExecuted,
   onActiveResultChange,
+  onDebugEvent,
   installAction,
   searchOptionsStore,
   keepHighlightsOnClose = false,
@@ -106,17 +133,29 @@ export function App({
   const lastSearchSignatureRef = useRef<string | undefined>(undefined);
   const pendingResultsScrollTopRef = useRef<number | undefined>(undefined);
   const skipNextResultListScrollRef = useRef(false);
-  const suppressPageScrollRefreshUntilRef = useRef(0);
   const highlightFrameRef = useRef<number | undefined>(undefined);
   const searchTaskIdRef = useRef<number | undefined>(undefined);
   const pendingSearchRef = useRef(false);
+  const searchCompleteRef = useRef(true);
+  const pageRefreshRunningRef = useRef(false);
+  const pageRefreshPendingRef = useRef(false);
+  const pageRefreshRequestRef = useRef<() => void>(() => {});
+  const pageRefreshFinishedRef = useRef<() => void>(() => {});
+  const pendingNavigationRef = useRef<-1 | 1 | undefined>(undefined);
+  const skipNextOpenFocusRef = useRef(false);
   const pendingActiveResultIndexRef = useRef<number | null | undefined>(undefined);
+  const pendingActiveResultAnchorRef = useRef<SearchResultAnchor | undefined>(undefined);
+  const restorationAnchorRef = useRef<SearchResultAnchor | undefined>(undefined);
+  const resultsStateRef = useRef<SearchResultView[]>([]);
+  const activeIdRef = useRef<string | undefined>(undefined);
   const queryRef = useRef(query);
   const searchOptionsRef = useRef(searchOptions);
   const restoreSessionRef = useRef<(
     query: string,
     options: SearchOptions,
     activeResultIndex?: number | null,
+    open?: boolean,
+    activeResultAnchor?: SearchResultAnchor,
   ) => void>(() => {});
   const runPendingSearchRef = useRef<() => void>(() => {});
   const navigateShortcutRef = useRef<(direction: -1 | 1) => void>(() => {});
@@ -129,6 +168,12 @@ export function App({
   });
   queryRef.current = query;
   searchOptionsRef.current = searchOptions;
+  resultsStateRef.current = results;
+  activeIdRef.current = activeId;
+
+  const debug = useCallback((event: string, details?: Record<string, unknown>) => {
+    onDebugEvent?.(event, details);
+  }, [onDebugEvent]);
 
   useEffect(() => installPageHighlightStyles(), []);
 
@@ -153,9 +198,10 @@ export function App({
   }, []);
 
   const handleOptionsOpenChange = useCallback((open: boolean) => {
+    debug('ui.options.visibility-changed', { open });
     setOptionsVisibility(open);
     if (!open && isOpenRef.current) focusInputWithoutSelection();
-  }, [focusInputWithoutSelection, setOptionsVisibility]);
+  }, [debug, focusInputWithoutSelection, setOptionsVisibility]);
 
   const setPanelVisibility = useCallback((visible: boolean) => {
     const panel = panelRef.current;
@@ -178,13 +224,17 @@ export function App({
   }, []);
 
   const focusInput = useCallback(() => {
-    inputRef.current?.focus();
+    debug('focus.requested', {
+      activeElement: document.activeElement?.nodeName,
+      inputFocused: document.activeElement === inputRef.current,
+    });
+    inputRef.current?.focus({ preventScroll: true });
     inputRef.current?.select();
     requestAnimationFrame(() => {
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
       inputRef.current?.select();
     });
-  }, []);
+  }, [debug]);
 
   const close = useCallback(() => {
     if (!isOpenRef.current) return;
@@ -245,8 +295,8 @@ export function App({
 
     const handle: FindInPageHandle = {
       openAndFocus: (queryOverride, optionsOverride) => open(queryOverride, optionsOverride),
-      restoreSession(query, options, activeResultIndex) {
-        restoreSessionRef.current(query, options, activeResultIndex);
+      restoreSession(query, options, activeResultIndex, open, activeResultAnchor) {
+        restoreSessionRef.current(query, options, activeResultIndex, open, activeResultAnchor);
       },
       runPendingSearch() {
         runPendingSearchRef.current();
@@ -264,6 +314,27 @@ export function App({
       close,
       focus: focusInput,
       isOpen: () => isOpenRef.current,
+      getDebugState() {
+        const panel = panelRef.current;
+        if (!panel) return { open: isOpenRef.current, panel: 'missing' };
+        const style = getComputedStyle(panel);
+        const rect = panel.getBoundingClientRect();
+        return {
+          open: isOpenRef.current,
+          connected: panel.isConnected,
+          dataOpen: panel.dataset.open,
+          ariaHidden: panel.getAttribute('aria-hidden'),
+          inert: panel.inert,
+          display: style.display,
+          visibility: style.visibility,
+          opacity: style.opacity,
+          pointerEvents: style.pointerEvents,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          top: Math.round(rect.top),
+          right: Math.round(rect.right),
+        };
+      },
       closeTransient() {
         if (!optionsOpenRef.current) return false;
         setOptionsVisibility(false);
@@ -282,8 +353,13 @@ export function App({
 
   useEffect(() => {
     if (!isOpen) return;
+    if (skipNextOpenFocusRef.current) {
+      skipNextOpenFocusRef.current = false;
+      debug('focus.skipped', { source: 'session-restore' });
+      return;
+    }
     focusInput();
-  }, [focusInput, isOpen]);
+  }, [debug, focusInput, isOpen]);
 
   const runSearch = useCallback(
     (
@@ -294,10 +370,16 @@ export function App({
       selectedRange?: Range,
       scrollToInitialResult = true,
       initialResultIndex?: number | null,
+      source = 'unknown',
+      initialResultAnchor?: SearchResultAnchor,
     ) => {
+      const isBackgroundRefresh = source === 'page-mutation';
+      const resultAnchor = initialResultAnchor ?? (preservePosition
+        ? restorationAnchorRef.current
+        : undefined);
       const selectionAnchor =
-        preservePosition && activeId
-          ? searchRef.current.captureSelection(activeId)
+        preservePosition && activeIdRef.current
+          ? searchRef.current.captureSelection(activeIdRef.current)
           : undefined;
       if (preservePosition) {
         pendingResultsScrollTopRef.current = resultsRef.current?.scrollTop ?? 0;
@@ -307,9 +389,24 @@ export function App({
         : undefined;
 
       lastSearchSignatureRef.current = JSON.stringify([nextQuery, nextSearchOptions]);
+      if (source !== 'page-mutation') {
+        pageRefreshRunningRef.current = false;
+        pageRefreshPendingRef.current = false;
+      }
       pendingSearchRef.current = false;
+      if (!isBackgroundRefresh) searchCompleteRef.current = nextQuery.length === 0;
+      debug('search.started', {
+        source,
+        query: nextQuery,
+        options: nextSearchOptions,
+        preservePosition,
+        navigateOnComplete,
+        initialResultIndex,
+        initialResultAnchor: resultAnchor,
+        activeId: activeIdRef.current,
+      });
       onSearchExecuted?.(nextQuery, nextSearchOptions);
-      setIsSearching(nextQuery.length > 0);
+      if (!isBackgroundRefresh) setIsSearching(nextQuery.length > 0);
       let selectedInitialResult = false;
       let selectedResultId: string | undefined;
       let taskId: number | undefined;
@@ -317,8 +414,12 @@ export function App({
         if (taskId !== undefined && searchTaskIdRef.current !== taskId) return;
         setSearchError(response.error);
         setResults(response.results);
+        resultsStateRef.current = response.results;
         setHighlightMode(response.highlightMode);
-        setIsSearching(!response.complete);
+        if (!isBackgroundRefresh) {
+          setIsSearching(!response.complete);
+          searchCompleteRef.current = response.complete;
+        }
 
         const resolvedId = selectionAnchor
           ? searchRef.current.resolveSelection(selectionAnchor)
@@ -334,6 +435,10 @@ export function App({
           ? response.complete
             ? response.results[navigateOnComplete === 1 ? 0 : response.results.length - 1]
             : undefined
+          : resultAnchor
+            ? response.complete
+              ? findAnchoredResult(response.results, resultAnchor, initialResultIndex)
+              : undefined
           : initialResultIndex === null
             ? undefined
           : initialResultIndex !== undefined
@@ -347,32 +452,79 @@ export function App({
         if (!selectedInitialResult && nextResult) {
           selectedInitialResult = true;
           selectedResultId = nextResult.id;
-          if (!preservePosition && !rangeSelectionAnchor) suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
-          setActiveId(
-            searchRef.current.select(nextResult.id, {
-              scroll: scrollToInitialResult && !preservePosition && !rangeSelectionAnchor,
-            })
-              ? nextResult.id
-              : undefined,
-          );
-          onActiveResultChange?.(response.results.indexOf(nextResult));
+          const didSelect = searchRef.current.select(nextResult.id, {
+            scroll: scrollToInitialResult && !preservePosition && !rangeSelectionAnchor,
+          });
+          const nextActiveId = didSelect ? nextResult.id : undefined;
+          setActiveId(nextActiveId);
+          activeIdRef.current = nextActiveId;
+          debug('selection.initialized', {
+            source,
+            index: response.results.indexOf(nextResult),
+            resultId: nextActiveId,
+            requestedIndex: initialResultIndex,
+            restoredByAnchor: Boolean(resultAnchor),
+            scroll: scrollToInitialResult && !preservePosition && !rangeSelectionAnchor,
+          });
+          onActiveResultChange?.(response.results.indexOf(nextResult), toResultAnchor(nextResult));
+          if (resultAnchor) restorationAnchorRef.current = undefined;
         } else if (response.complete && initialResultIndex === null) {
           setActiveId(undefined);
+          activeIdRef.current = undefined;
           onActiveResultChange?.(undefined);
         } else if (response.complete && response.results.length === 0) {
           setActiveId(undefined);
+          activeIdRef.current = undefined;
           onActiveResultChange?.(undefined);
         } else if (response.complete && selectedResultId) {
           searchRef.current.select(selectedResultId, { scroll: false });
+        }
+        debug('search.batch', {
+          source,
+          query: nextQuery,
+          options: nextSearchOptions,
+          complete: response.complete,
+          resultCount: response.results.length,
+          selectedIndex: response.results.findIndex((result) => result.id === activeIdRef.current),
+          error: response.error?.code,
+        });
+        if (response.complete) {
+          if (isBackgroundRefresh) {
+            pageRefreshRunningRef.current = false;
+            pageRefreshFinishedRef.current();
+          }
+          if (pageRefreshPendingRef.current) {
+            pageRefreshPendingRef.current = false;
+            debug('page-refresh.draining');
+            queueMicrotask(() => pageRefreshRequestRef.current());
+          }
+        }
+        if (response.complete && pendingNavigationRef.current !== undefined) {
+          const direction = pendingNavigationRef.current;
+          pendingNavigationRef.current = undefined;
+          navigateShortcutRef.current(direction);
         }
       });
       taskId = task.id;
       searchTaskIdRef.current = task.id;
     },
-    [activeId, onActiveResultChange, onSearchExecuted, query, searchOptions],
+    [activeId, debug, onActiveResultChange, onSearchExecuted, query, searchOptions],
   );
 
-  restoreSessionRef.current = (restoredQuery, restoredOptions, activeResultIndex) => {
+  restoreSessionRef.current = (
+    restoredQuery,
+    restoredOptions,
+    activeResultIndex,
+    open = true,
+    activeResultAnchor,
+  ) => {
+    debug('session.restore.requested', {
+      query: restoredQuery,
+      options: restoredOptions,
+      activeResultIndex,
+      activeResultAnchor,
+      open,
+    });
     queryRef.current = restoredQuery;
     searchOptionsRef.current = restoredOptions;
     setQuery(restoredQuery);
@@ -381,19 +533,28 @@ export function App({
     setResults([]);
     setActiveId(undefined);
     lastSearchSignatureRef.current = JSON.stringify([restoredQuery, restoredOptions]);
-    pendingSearchRef.current = restoredQuery.length > 0;
+    pendingSearchRef.current = open && restoredQuery.length > 0;
     pendingActiveResultIndexRef.current = activeResultIndex;
+    pendingActiveResultAnchorRef.current = activeResultAnchor;
+    restorationAnchorRef.current = activeResultAnchor;
+    if (!open) return;
     if (!isOpenRef.current) {
+      skipNextOpenFocusRef.current = true;
       isOpenRef.current = true;
       restoreFocusRef.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setPanelVisibility(true);
       setIsOpen(true);
     }
-    focusInput();
   };
 
   runPendingSearchRef.current = () => {
+    debug('session.restore.search-requested', {
+      query: queryRef.current,
+      options: searchOptionsRef.current,
+      activeResultIndex: pendingActiveResultIndexRef.current,
+      activeResultAnchor: pendingActiveResultAnchorRef.current,
+    });
     runSearch(
       false,
       undefined,
@@ -402,8 +563,11 @@ export function App({
       undefined,
       false,
       pendingActiveResultIndexRef.current,
+      'session-restore',
+      pendingActiveResultAnchorRef.current,
     );
     pendingActiveResultIndexRef.current = undefined;
+    pendingActiveResultAnchorRef.current = undefined;
   };
 
   useEffect(() => {
@@ -411,7 +575,7 @@ export function App({
     if (lastSearchSignatureRef.current === JSON.stringify([query, searchOptions])) return;
 
     const timeout = window.setTimeout(() => {
-      runSearch(false);
+      runSearch(false, undefined, query, searchOptions, undefined, true, undefined, 'query-debounce');
     }, 120);
 
     return () => window.clearTimeout(timeout);
@@ -420,7 +584,6 @@ export function App({
   useEffect(() => {
     if (!isOpen || query.length === 0) return;
 
-    let refreshTimeout: number | undefined;
     const observedRoots = new Set<Node>();
     const observedDocuments = new Set<Document>();
     const observers = new Map<Document, MutationObserver>();
@@ -435,16 +598,39 @@ export function App({
         const MutationObserverForDocument = ownerDocument.defaultView?.MutationObserver;
         if (!MutationObserverForDocument) return;
         observer = new MutationObserverForDocument((records) => {
+          if (pageRefreshRunningRef.current) {
+            debug('page-refresh.mutation-ignored', { recordCount: records.length });
+            return;
+          }
+          const isInsideExtensionUi = (node: Node) => {
+            const element = node.nodeType === Node.ELEMENT_NODE
+              ? node as Element
+              : node.parentElement;
+            return Boolean(element?.closest('[data-findinpage-host]'));
+          };
           const isOwnNode = (node: Node) => {
             if (node.nodeType !== 1) return false;
             const element = node as Element;
-            return element.hasAttribute('data-findinpage-fallback') ||
+            return isInsideExtensionUi(element) ||
+              element.hasAttribute('data-findinpage-fallback') ||
               element.hasAttribute('data-findinpage-control-mirror');
           };
-          if (records.every((record) =>
-            [...record.addedNodes, ...record.removedNodes].some(isOwnNode)
-          )) return;
-          scheduleRefresh();
+          if (records.every((record) => {
+            if (isInsideExtensionUi(record.target)) return true;
+            const changedNodes = [...record.addedNodes, ...record.removedNodes];
+            return changedNodes.length > 0 && changedNodes.every(isOwnNode);
+          })) return;
+          const activeSelection = activeIdRef.current
+            ? searchRef.current.captureSelection(activeIdRef.current)
+            : undefined;
+          if (activeSelection?.startContainer.isConnected) {
+            debug('page-refresh.mutation-skipped', {
+              reason: 'active-result-connected',
+              recordCount: records.length,
+            });
+            return;
+          }
+          scheduleRefresh('mutation');
         });
         observers.set(ownerDocument, observer);
       }
@@ -462,13 +648,9 @@ export function App({
       for (const ownerDocument of getAccessibleDocuments()) {
         if (!observedDocuments.has(ownerDocument)) {
           observedDocuments.add(ownerDocument);
-          ownerDocument.addEventListener('load', scheduleRefresh, true);
+          ownerDocument.defaultView?.addEventListener('load', handleDocumentLoad);
           ownerDocument.addEventListener('input', handleControlValueChange, true);
           ownerDocument.addEventListener('change', handleControlValueChange, true);
-          ownerDocument.defaultView?.addEventListener('scroll', handlePageScroll, {
-            capture: true,
-            passive: true,
-          });
         }
         if (ownerDocument.body) observeRoot(ownerDocument.body);
         for (const shadowRoot of getSearchableShadowRoots(ownerDocument.body)) {
@@ -476,64 +658,112 @@ export function App({
         }
       }
     };
-    const scheduleRefresh = () => {
+    const scheduleRefresh = (trigger = 'unknown') => {
       observeAccessibleDocuments();
-      if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
-      refreshTimeout = window.setTimeout(() => runSearch(true), 250);
+      debug(`page-refresh.requested.${trigger}`, {
+        trigger,
+        running: pageRefreshRunningRef.current,
+        pending: pageRefreshPendingRef.current,
+        foregroundSearchComplete: searchCompleteRef.current,
+      });
+      if (pageRefreshRunningRef.current || !searchCompleteRef.current) {
+        pageRefreshPendingRef.current = true;
+        debug('page-refresh.queued', {
+          reason: pageRefreshRunningRef.current ? 'refresh-running' : 'foreground-search-running',
+        });
+        return;
+      }
+      pageRefreshRunningRef.current = true;
+      for (const observer of observers.values()) observer.disconnect();
+      runSearch(true, undefined, query, searchOptions, undefined, true, undefined, 'page-mutation');
     };
-    const handlePageScroll = (event: Event) => {
-      if (event.composedPath().includes(resultsRef.current as EventTarget)) return;
-      if (performance.now() < suppressPageScrollRefreshUntilRef.current) return;
-      scheduleRefresh();
+    pageRefreshRequestRef.current = scheduleRefresh;
+    pageRefreshFinishedRef.current = () => {
+      for (const root of observedRoots) {
+        const ownerDocument = root.ownerDocument ?? document;
+        const observer = observers.get(ownerDocument);
+        if (!observer) continue;
+        observer.takeRecords();
+        try {
+          observer.observe(root, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        } catch {
+          // The frame may have navigated while the background refresh was running.
+        }
+      }
+      debug('page-refresh.observers-restored', { rootCount: observedRoots.size });
     };
+    function handleDocumentLoad() {
+      scheduleRefresh('document-load');
+    }
     const handleControlValueChange = (event: Event) => {
+      if (event.composedPath().includes(panelRef.current as EventTarget)) return;
       const target = event.target;
       if (!target || typeof target !== 'object' || !('matches' in target)) return;
       if ((target as Element).matches('textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"]')) {
-        scheduleRefresh();
+        scheduleRefresh('control-value');
       }
     };
 
     observeAccessibleDocuments();
 
     return () => {
+      pageRefreshRequestRef.current = () => {};
+      pageRefreshFinishedRef.current = () => {};
+      pageRefreshRunningRef.current = false;
+      pageRefreshPendingRef.current = false;
       for (const observer of observers.values()) observer.disconnect();
       for (const ownerDocument of observedDocuments) {
-        ownerDocument.removeEventListener('load', scheduleRefresh, true);
+        ownerDocument.defaultView?.removeEventListener('load', handleDocumentLoad);
         ownerDocument.removeEventListener('input', handleControlValueChange, true);
         ownerDocument.removeEventListener('change', handleControlValueChange, true);
-        ownerDocument.defaultView?.removeEventListener('scroll', handlePageScroll, {
-          capture: true,
-        });
       }
-      if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
     };
   }, [isOpen, query, runSearch]);
 
-  const selectResult = (result: SearchResultView, scroll = true) => {
-    if (scroll) {
-      suppressPageScrollRefreshUntilRef.current = performance.now() + 500;
-    }
+  const selectResult = (result: SearchResultView, scroll = true, source = 'unknown') => {
+    restorationAnchorRef.current = undefined;
     if (searchRef.current.select(result.id, { scroll })) {
       setActiveId(result.id);
-      onActiveResultChange?.(results.indexOf(result));
+      activeIdRef.current = result.id;
+      const index = resultsStateRef.current.findIndex((candidate) => candidate.id === result.id);
+      debug('selection.changed', { source, index, resultId: result.id, scroll });
+      onActiveResultChange?.(index, toResultAnchor(result));
       return;
     }
 
-    runSearch(false);
+    debug('selection.stale', { source, resultId: result.id });
+    runSearch(false, undefined, queryRef.current, searchOptionsRef.current, undefined, true, undefined, 'stale-selection');
   };
 
-  const navigateResult = (direction: -1 | 1) => {
-    if (results.length === 0) return;
+  const navigateResult = (direction: -1 | 1, source = 'unknown') => {
+    const currentResults = resultsStateRef.current;
+    debug('navigation.requested', {
+      source,
+      direction,
+      resultCount: currentResults.length,
+      activeId: activeIdRef.current,
+      pendingSearch: pendingSearchRef.current,
+      searchComplete: searchCompleteRef.current,
+    });
+    if (!searchCompleteRef.current) {
+      pendingNavigationRef.current = direction;
+      debug('navigation.queued', { source, direction });
+      return;
+    }
+    if (currentResults.length === 0) return;
 
-    const currentIndex = results.findIndex((result) => result.id === activeId);
+    const currentIndex = currentResults.findIndex((result) => result.id === activeIdRef.current);
     const nextIndex =
       currentIndex === -1
         ? direction === 1
           ? 0
-          : results.length - 1
-        : (currentIndex + direction + results.length) % results.length;
-    selectResult(results[nextIndex]);
+          : currentResults.length - 1
+        : (currentIndex + direction + currentResults.length) % currentResults.length;
+    selectResult(currentResults[nextIndex], true, source);
   };
 
   navigateShortcutRef.current = (direction) => {
@@ -548,19 +778,31 @@ export function App({
       focusInput();
     }
 
-    const signature = JSON.stringify([query, searchOptions]);
+    const signature = JSON.stringify([queryRef.current, searchOptionsRef.current]);
+    debug('navigation.shortcut.decision', {
+      direction,
+      pendingSearch: pendingSearchRef.current,
+      signatureMatches: lastSearchSignatureRef.current === signature,
+      searchComplete: searchCompleteRef.current,
+      resultCount: resultsStateRef.current.length,
+    });
     if (pendingSearchRef.current || lastSearchSignatureRef.current !== signature) {
-      runSearch(false, direction);
+      pendingNavigationRef.current = direction;
+      runSearch(false, undefined, queryRef.current, searchOptionsRef.current, undefined, true, pendingActiveResultIndexRef.current, 'navigation-shortcut');
       return;
     }
-    navigateResult(direction);
+    navigateResult(direction, 'navigation-shortcut');
   };
 
   searchSelectionRef.current = (selection) => {
     pendingSearchRef.current = false;
+    debug('search.selection-requested', {
+      query: selection.text,
+      options: searchOptions,
+    });
     setQuery(selection.text);
     onQueryChange?.(selection.text, searchOptions);
-    runSearch(false, undefined, selection.text, searchOptions, selection.range);
+    runSearch(false, undefined, selection.text, searchOptions, selection.range, true, undefined, 'selection-shortcut');
     focusInput();
   };
 
@@ -629,25 +871,44 @@ export function App({
         pendingSearchRef.current ||
         lastSearchSignatureRef.current !== JSON.stringify([query, searchOptions])
       ) {
-        runSearch(false);
+        runSearch(false, undefined, query, searchOptions, undefined, true, undefined, 'input-enter');
       } else if (!navigationDisabled) {
-        navigateResult(1);
+        navigateResult(1, 'input-enter');
       }
     } else if (event.key === 'ArrowUp' && !navigationDisabled) {
       event.preventDefault();
-      navigateResult(-1);
+      navigateResult(-1, 'input-arrow-up');
     } else if (event.key === 'ArrowDown' && !navigationDisabled) {
       event.preventDefault();
-      navigateResult(1);
+      navigateResult(1, 'input-arrow-down');
     }
   };
 
   const updateSearchOption = (name: keyof SearchOptions, checked: boolean) => {
     pendingSearchRef.current = false;
     const nextOptions = { ...searchOptions, [name]: checked };
+    debug('search.options.changed', { name, checked, options: nextOptions });
     setSearchOptions(nextOptions);
     void searchOptionsStore?.save(nextOptions);
     onSearchOptionsChange?.(nextOptions);
+  };
+
+  const logUiEvent = (event: React.SyntheticEvent, eventName: string) => {
+    const target = event.target instanceof Element ? event.target : undefined;
+    const keyboardEvent = event.nativeEvent instanceof KeyboardEvent
+      ? event.nativeEvent
+      : undefined;
+    debug(`ui.event.${eventName}`, {
+      tag: target?.tagName,
+      role: target?.getAttribute('role'),
+      ariaLabel: target?.getAttribute('aria-label'),
+      inputType: target instanceof HTMLInputElement ? target.type : undefined,
+      key: keyboardEvent?.key,
+      metaKey: keyboardEvent?.metaKey,
+      ctrlKey: keyboardEvent?.ctrlKey,
+      altKey: keyboardEvent?.altKey,
+      shiftKey: keyboardEvent?.shiftKey,
+    });
   };
 
   return (
@@ -661,6 +922,12 @@ export function App({
       aria-hidden={!isOpen}
       data-open={isOpen}
       inert={isOpen ? undefined : true}
+      onPointerDownCapture={(event) => logUiEvent(event, 'pointerdown')}
+      onClickCapture={(event) => logUiEvent(event, 'click')}
+      onKeyDownCapture={(event) => logUiEvent(event, 'keydown')}
+      onFocusCapture={(event) => logUiEvent(event, 'focus')}
+      onBlurCapture={(event) => logUiEvent(event, 'blur')}
+      onChangeCapture={(event) => logUiEvent(event, 'change')}
     >
       <div className="findinpage-toolbar">
         <div className="findinpage-input-wrapper">
@@ -684,6 +951,10 @@ export function App({
             onKeyDown={handleSearchInputKeyDown}
             onChange={(event) => {
               pendingSearchRef.current = false;
+              debug('search.query.changed', {
+                query: event.target.value,
+                options: searchOptions,
+              });
               setQuery(event.target.value);
               onQueryChange?.(event.target.value, searchOptions);
             }}
@@ -754,7 +1025,7 @@ export function App({
           aria-label={t('previousResult')}
           title={t('previousResult')}
           disabled={navigationDisabled}
-          onClick={() => navigateResult(-1)}
+          onClick={() => navigateResult(-1, 'previous-button')}
         >
           <ChevronUp data-icon="inline-start" aria-hidden="true" />
         </Button>
@@ -765,7 +1036,7 @@ export function App({
           aria-label={t('nextResult')}
           title={t('nextResult')}
           disabled={navigationDisabled}
-          onClick={() => navigateResult(1)}
+          onClick={() => navigateResult(1, 'next-button')}
         >
           <ChevronDown data-icon="inline-start" aria-hidden="true" />
         </Button>
@@ -842,7 +1113,7 @@ export function App({
                     if (result.id !== activeId) {
                       skipNextResultListScrollRef.current = true;
                     }
-                    selectResult(result);
+                    selectResult(result, true, 'result-click');
                     focusInputWithoutSelection();
                   }}
                 >

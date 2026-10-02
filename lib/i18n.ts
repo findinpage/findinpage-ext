@@ -168,10 +168,15 @@ export function resolveLocale(locales: readonly string[]): SupportedLocale {
 }
 
 export function getBrowserLocale(): SupportedLocale {
-  const browserLocale =
-    typeof browser !== 'undefined' && browser.i18n?.getUILanguage
-      ? browser.i18n.getUILanguage()
-      : '';
+  let browserLocale = '';
+  try {
+    browserLocale =
+      typeof browser !== 'undefined' && browser.i18n?.getUILanguage
+        ? browser.i18n.getUILanguage()
+        : '';
+  } catch {
+    // Extension reloads can leave the old content script alive without an API context.
+  }
   const locales = [
     ...(typeof navigator !== 'undefined' ? navigator.languages : []),
     browserLocale,

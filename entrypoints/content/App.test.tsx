@@ -213,6 +213,73 @@ describe('App close and reopen', () => {
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('2/3');
   });
 
+  it('logs generic UI events and semantic navigation events', () => {
+    mockSearch(true);
+    const onDebugEvent = vi.fn();
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          onDebugEvent={onDebugEvent}
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+      vi.runAllTimers();
+    });
+    act(() => handle.openAndFocus());
+    act(() => vi.runAllTimers());
+
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Next result"]',
+    );
+    act(() => nextButton?.click());
+
+    expect(onDebugEvent).toHaveBeenCalledWith(
+      'ui.event.click',
+      expect.objectContaining({ ariaLabel: 'Next result', tag: 'BUTTON' }),
+    );
+    expect(onDebugEvent).toHaveBeenCalledWith(
+      'navigation.requested',
+      expect.objectContaining({ direction: 1, source: 'next-button' }),
+    );
+  });
+
+  it('does not show background page refreshes as an active user search', async () => {
+    vi.spyOn(PageSearch.prototype, 'select').mockReturnValue(true);
+    const completeResponse: SearchResponse = {
+      results: RESULTS,
+      durationMs: 1,
+      complete: true,
+      highlightMode: 'native',
+    };
+    const incompleteResponse = { ...completeResponse, complete: false };
+    let searchCount = 0;
+    vi.spyOn(PageSearch.prototype, 'search').mockImplementation((_query, _options, onUpdate) => {
+      const response = searchCount++ === 0 ? completeResponse : incompleteResponse;
+      onUpdate?.(response);
+      return {
+        id: searchCount,
+        cancel: vi.fn(),
+        done: response.complete ? Promise.resolve(response) : new Promise(() => {}),
+      };
+    });
+    renderAndOpen();
+
+    await act(async () => {
+      const pageMutation = document.createElement('div');
+      pageMutation.textContent = 'page changed';
+      document.body.append(pageMutation);
+      await Promise.resolve();
+      pageMutation.remove();
+    });
+
+    expect(container.querySelector('[role="status"]')?.textContent)
+      .not.toContain('Searching');
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
+  });
+
   it('runs a pending query before navigating backward', () => {
     const search = mockSearch(true);
     renderAndOpen();
@@ -322,8 +389,46 @@ describe('App close and reopen', () => {
     );
   });
 
+  it('hydrates a closed session without opening or searching', () => {
+    const search = mockSearch(true);
+    act(() => {
+      root.render(
+        <App
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      handle.restoreSession(
+        'retained query',
+        {
+          caseSensitive: false,
+          wholeWord: true,
+          useRegularExpression: false,
+        },
+        undefined,
+        false,
+      );
+    });
+
+    expect(handle.isOpen()).toBe(false);
+    expect(container.querySelector<HTMLInputElement>('.findinpage-input')?.value)
+      .toBe('retained query');
+    expect(search).not.toHaveBeenCalled();
+
+    act(() => handle.toggle());
+
+    expect(handle.isOpen()).toBe(true);
+  });
+
   it('reruns a restored same-page query and restores its result index without scrolling', () => {
     const search = mockSearch(true);
+    const pageControl = document.createElement('button');
+    document.body.append(pageControl);
+    pageControl.focus();
     act(() => {
       root.render(
         <App
@@ -360,7 +465,80 @@ describe('App close and reopen', () => {
       'result-3',
       { scroll: false },
     );
+    expect(document.activeElement).toBe(pageControl);
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+    pageControl.remove();
+  });
+
+  it('restores the same excerpt when its result index changes after refresh', () => {
+    mockSearch(true);
+    act(() => {
+      root.render(
+        <App
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      handle.restoreSession(
+        'needle',
+        {
+          caseSensitive: false,
+          wholeWord: false,
+          useRegularExpression: false,
+        },
+        0,
+        true,
+        { before: '', match: 'needle', after: ' three' },
+      );
+      handle.runPendingSearch();
+    });
+
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith(
+      'result-3',
+      { scroll: false },
+    );
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+  });
+
+  it('navigates immediately after restoring a search by button and shortcut', () => {
+    mockSearch(true);
+    act(() => {
+      root.render(
+        <App
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      handle.restoreSession(
+        'needle',
+        {
+          caseSensitive: false,
+          wholeWord: false,
+          useRegularExpression: false,
+        },
+        0,
+      );
+      handle.runPendingSearch();
+    });
+
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Next result"]',
+    );
+    act(() => nextButton?.click());
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('2/3');
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith('result-2', { scroll: true });
+
+    act(() => handle.navigate(1));
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+    expect(PageSearch.prototype.select).toHaveBeenLastCalledWith('result-3', { scroll: true });
   });
 
   it('keeps a restored same-page search explicitly unselected', () => {

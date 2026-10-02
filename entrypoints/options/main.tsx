@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  Bug,
   ChevronDown,
+  Clipboard,
   ExternalLink,
   Globe2,
   Highlighter,
@@ -12,6 +14,7 @@ import {
   Settings2,
   Star,
   Sun,
+  Trash2,
 } from 'lucide-react';
 import {
   getEffectiveLocale,
@@ -32,6 +35,15 @@ import {
   loadKeepHighlightsOnClose,
   saveKeepHighlightsOnClose,
 } from '@/lib/highlight-preference';
+import {
+  clearDebugEntries,
+  DEBUG_LOG_STORAGE_KEY,
+  formatDebugEntries,
+  loadDebugEnabled,
+  loadDebugEntries,
+  saveDebugEnabled,
+  type DebugEntry,
+} from '@/lib/debug-log';
 import './style.css';
 
 const CHROME_REVIEW_URL = 'https://chromewebstore.google.com/detail/find-in-page/ghgneafbinoihjfpmcdglhmoieekmnji/reviews';
@@ -41,6 +53,9 @@ function OptionsApp() {
   const [themePreference, setThemePreference] = useState<ThemePreference>('system');
   const [keepHighlightsOnClose, setKeepHighlightsOnClose] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [debugEnabled, setDebugEnabled] = useState(false);
+  const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
+  const [debugStatus, setDebugStatus] = useState('');
   const [savedSetting, setSavedSetting] = useState<'language' | 'theme' | 'behavior' | null>(null);
   const locale = getEffectiveLocale(preference);
   const t = useMemo(() => (
@@ -54,12 +69,25 @@ function OptionsApp() {
       loadLocalePreference(),
       loadThemePreference(),
       loadKeepHighlightsOnClose(),
-    ]).then(([localeValue, themeValue, keepHighlights]) => {
+      loadDebugEnabled(),
+      loadDebugEntries(),
+    ]).then(([localeValue, themeValue, keepHighlights, debug, entries]) => {
       setPreference(localeValue);
       setThemePreference(themeValue);
       setKeepHighlightsOnClose(keepHighlights);
+      setDebugEnabled(debug);
+      setDebugEntries(entries);
       setLoaded(true);
     });
+  }, []);
+
+  useEffect(() => {
+    const onStorageChange = (changes: Record<string, Browser.storage.StorageChange>) => {
+      if (!changes[DEBUG_LOG_STORAGE_KEY]) return;
+      void loadDebugEntries().then(setDebugEntries);
+    };
+    browser.storage.onChanged.addListener(onStorageChange);
+    return () => browser.storage.onChanged.removeListener(onStorageChange);
   }, []);
 
   useEffect(() => {
@@ -101,6 +129,25 @@ function OptionsApp() {
     await saveKeepHighlightsOnClose(value);
     setSavedSetting('behavior');
     window.setTimeout(() => setSavedSetting(null), 1600);
+  };
+
+  const updateDebugEnabled = async (value: boolean) => {
+    if (value) await clearDebugEntries();
+    await saveDebugEnabled(value);
+    setDebugEnabled(value);
+    setDebugEntries([]);
+    setDebugStatus(value ? 'Recording started' : 'Recording stopped');
+  };
+
+  const copyDebugLog = async () => {
+    await navigator.clipboard.writeText(formatDebugEntries(debugEntries));
+    setDebugStatus('Copied');
+  };
+
+  const clearDebugLog = async () => {
+    await clearDebugEntries();
+    setDebugEntries([]);
+    setDebugStatus('Cleared');
   };
 
   const themeOptions = [
@@ -224,6 +271,38 @@ function OptionsApp() {
             <dd><a href="mailto:support@findin.page">support@findin.page <Mail aria-hidden="true" /></a></dd>
           </div>
         </dl>
+      </section>
+
+      <section className="settings-section" aria-labelledby="debug-heading">
+        <div className="section-heading">
+          <Bug aria-hidden="true" />
+          <h2 id="debug-heading">Debug log</h2>
+        </div>
+        <label className="switch-setting">
+          <span>
+            <strong>Record diagnostic events</strong>
+            <small>Stored locally. URLs exclude query strings and fragments. Up to 300 events are retained.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={debugEnabled}
+            disabled={!loaded}
+            onChange={(event) => void updateDebugEnabled(event.target.checked)}
+          />
+          <span className="switch-control" aria-hidden="true" />
+        </label>
+        <div className="debug-toolbar">
+          <button type="button" onClick={() => void copyDebugLog()} disabled={debugEntries.length === 0}>
+            <Clipboard aria-hidden="true" />Copy log
+          </button>
+          <button type="button" onClick={() => void clearDebugLog()} disabled={debugEntries.length === 0}>
+            <Trash2 aria-hidden="true" />Clear
+          </button>
+          <span className="saved-status" role="status">{debugStatus}</span>
+        </div>
+        <pre className="debug-log" aria-label="Diagnostic log">
+          {debugEntries.length > 0 ? formatDebugEntries(debugEntries) : 'No diagnostic events recorded.'}
+        </pre>
       </section>
     </main>
   );

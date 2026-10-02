@@ -61,6 +61,13 @@ select:focus-visible, a:focus-visible { outline: 3px solid #1a73e8; outline-offs
 .about-list dd { margin: 0; font-size: 14px; font-weight: 550; }
 .about-list a { display: inline-flex; align-items: center; gap: 6px; color: #1559a8; text-decoration: underline; text-underline-offset: 3px; }
 .about-list a svg { width: 14px; height: 14px; }
+.debug-toolbar { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.debug-toolbar button { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #a1a1aa; border-radius: 6px; background: #fff; color: #18181b; cursor: pointer; }
+.debug-toolbar button:hover:not(:disabled) { border-color: #71717a; background: #f4f4f5; }
+.debug-toolbar button:disabled { cursor: default; opacity: .5; }
+.debug-toolbar button:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+.debug-toolbar svg { width: 15px; height: 15px; }
+.debug-log { box-sizing: border-box; width: 100%; max-height: 360px; margin: 12px 0 0; overflow: auto; padding: 12px; border: 1px solid #d4d4d8; border-radius: 6px; background: #fff; color: #27272a; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 :root[data-theme="dark"] { background: #18181b; color: #f4f4f5; }
 :root[data-theme="dark"] {
@@ -73,6 +80,9 @@ select:focus-visible, a:focus-visible { outline: 3px solid #1a73e8; outline-offs
   .theme-option input:checked + span { background: #52525b; color: #f4f4f5; box-shadow: 0 1px 3px rgb(0 0 0 / 40%); }
   .about-list > div { border-color: #3f3f46; }
   .about-list a { color: #8ab4f8; }
+  .debug-toolbar button { border-color: #52525b; background: #27272a; color: #f4f4f5; }
+  .debug-toolbar button:hover:not(:disabled) { border-color: #71717a; background: #3f3f46; }
+  .debug-log { border-color: #3f3f46; background: #09090b; color: #e4e4e7; }
   .saved-status { color: #86efac; }
   .switch-control { border-color: #71717a; background: #52525b; }
   .switch-setting input:checked + .switch-control { border-color: #8ab4f8; background: #8ab4f8; }

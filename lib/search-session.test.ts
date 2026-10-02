@@ -52,6 +52,7 @@ describe('search session state', () => {
       searchUrl: 'https://example.com/page#match',
       activeResultIndex: 2,
       activeResultUrl: 'https://example.com/page#result-3',
+      activeResultAnchor: { before: 'before', match: 'needle', after: 'after' },
     });
 
     expect(mergeSearchSession(initial, { isOpen: false })).toEqual({
@@ -62,6 +63,25 @@ describe('search session state', () => {
       .toBeUndefined();
     expect(initial.searchUrl).toBe('https://example.com/page');
     expect(initial.activeResultUrl).toBe('https://example.com/page');
+  });
+
+  it('keeps a bounded text excerpt with the active result', () => {
+    const session = normalizeSearchSession({
+      version: SEARCH_SESSION_VERSION,
+      isOpen: true,
+      query: 'needle',
+      searchOptions: {},
+      searchUrl: 'https://example.com/page',
+      activeResultIndex: 2,
+      activeResultUrl: 'https://example.com/page',
+      activeResultAnchor: { before: 'before', match: 'needle', after: 'after' },
+    });
+
+    expect(session?.activeResultAnchor).toEqual({
+      before: 'before',
+      match: 'needle',
+      after: 'after',
+    });
   });
 
   it('does not restore an index that has no same-page URL binding', () => {
