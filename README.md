@@ -1,6 +1,6 @@
 # Find in Page
 
-Find in Page is a free, open-source browser extension that replaces the ordinary
+Find in Page is a free, open-source Chrome extension that replaces the ordinary
 find-in-page interaction with a compact list of every match and its surrounding
 context. It keeps the familiar `Command+F` / `Ctrl+F` shortcut while making it
 easier to scan a page and jump directly to the result you need.
@@ -9,6 +9,7 @@ easier to scan a page and jump directly to the result you need.
 
 - Website: [findin.page](https://findin.page)
 - Chrome Web Store: [Install Find in Page](https://chromewebstore.google.com/detail/ghgneafbinoihjfpmcdglhmoieekmnji)
+- Releases: [Download from GitHub](https://github.com/findinpage/findinpage-ext/releases)
 - Source: [github.com/findinpage/findinpage-ext](https://github.com/findinpage/findinpage-ext)
 - Support: [support@findin.page](mailto:support@findin.page)
 
@@ -110,12 +111,14 @@ replaced or the extension is destroyed.
 
 ## Browser support
 
-The core Find in Page experience is available in Chrome, Edge, and Firefox.
-Safari support is planned.
+Find in Page is currently published for Chrome. Edge and Firefox releases are
+planned; the current codebase can already be built for Chromium and Firefox,
+but those packages are not yet distributed through their browser stores. Safari
+support is planned and is not implemented in this repository today.
 
 | Feature | Chrome | Edge | Firefox | Safari |
 | --- | :---: | :---: | :---: | :---: |
-| Available today | Yes | Yes | Yes | Planned |
+| Available today | Yes | Planned | Planned | Planned |
 | Open source and free to use | Yes | Yes | Yes | No |
 | Light and dark themes | Yes | Yes | Yes | No |
 | Context-rich results and page highlights | Yes | Yes | Yes | No |
