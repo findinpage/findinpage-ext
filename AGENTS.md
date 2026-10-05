@@ -103,6 +103,19 @@
 
 ## 5. Guidelines for AI Coding Agents
 
+### Product Documentation Consistency
+
+- When this repository is used inside the sibling workspace, read
+  `../product-facts.json` before changing browser availability, release status,
+  features, shortcuts, locales, download links, privacy claims, or runtime
+  requirements.
+- Distinguish implemented, buildable, publicly published, and planned. A build
+  target is not publicly available unless it has an active installation link.
+- Search the sibling `findinpage-web` repository for affected product copy and
+  update it in the same task when it is available and the task permits it.
+- Run `node ../scripts/check-product-docs.mjs` after product-fact or
+  documentation changes when working in the sibling workspace.
+
 ### Interaction Observability
 
 - Every UI interaction, keyboard shortcut, runtime message, toolbar action, focus transition, and extension-owned event path must emit a local debug event through the existing debug logging hook. This requirement applies to all future features and controls, not only the current search panel.
