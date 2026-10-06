@@ -224,13 +224,23 @@ export default defineContentScript({
 
       if (!isFindShortcut) return;
 
+      const open = appHandle?.isOpen() ?? false;
+      const inputFocused = appHandle?.isSearchInputFocused() ?? false;
+      const plannedAction = !appHandle || !open
+        ? 'open'
+        : inputFocused
+          ? 'close'
+          : 'focus';
+
       logContentDebug('shortcut.find', {
         key: event.key,
         metaKey: event.metaKey,
         ctrlKey: event.ctrlKey,
         shiftKey: event.shiftKey,
         ready: Boolean(appHandle),
-        open: appHandle?.isOpen(),
+        open,
+        inputFocused,
+        action: plannedAction,
       });
 
       event.preventDefault();
@@ -238,7 +248,7 @@ export default defineContentScript({
       userInteracted = true;
 
       if (appHandle) {
-        appHandle.toggle();
+        appHandle.handleFindShortcut();
       } else {
         openWhenReady = true;
       }

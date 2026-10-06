@@ -17,8 +17,9 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 
 ## Features
 
-- **A familiar entry point:** open or close Find in Page with `Command+F` on macOS,
-  `Ctrl+F` on Windows/Linux, or the extension toolbar icon. Press `Escape` to
+- **A familiar entry point:** open Find in Page or return focus to its search field
+  with `Command+F` on macOS or `Ctrl+F` on Windows/Linux. Press the shortcut again
+  while the search field is focused to close it, or use the extension toolbar icon. Press `Escape` to
   close the panel.
 - **Context-rich results:** see every match in document order, numbered and
   shown with nearby words from its paragraph, heading, list item, table cell,
@@ -73,7 +74,7 @@ does not store the query, results, or page content.
 
 | macOS | Windows/Linux | Description |
 | --- | --- | --- |
-| `Command+F` | `Ctrl+F` | Open or close Find in Page. |
+| `Command+F` | `Ctrl+F` | Open Find in Page or focus its search field; press again while focused to close it. |
 | `Command+G` | `Ctrl+G` | Open the panel if needed, run any pending search, and move to the next result. |
 | `Command+Shift+G` | `Ctrl+Shift+G` | Open the panel if needed, run any pending search, and move to the previous result. |
 | `Command+E` | `Ctrl+E` | While the panel is open, search for text selected on the page and activate that occurrence without scrolling the page. |

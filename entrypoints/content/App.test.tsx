@@ -213,6 +213,62 @@ describe('App close and reopen', () => {
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('2/3');
   });
 
+  it('opens, restores input focus, then closes on repeated find shortcuts', () => {
+    mockSearch(true);
+    const onDebugEvent = vi.fn();
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          onDebugEvent={onDebugEvent}
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>('.findinpage-input');
+    const pageControl = document.createElement('button');
+    document.body.append(pageControl);
+
+    act(() => {
+      expect(handle.handleFindShortcut()).toBe('open');
+      vi.runAllTimers();
+    });
+    expect(handle.isOpen()).toBe(true);
+    expect(handle.isSearchInputFocused()).toBe(true);
+
+    act(() => pageControl.focus());
+    expect(handle.isSearchInputFocused()).toBe(false);
+
+    act(() => {
+      expect(handle.handleFindShortcut()).toBe('focus');
+      vi.runAllTimers();
+    });
+
+    expect(handle.isOpen()).toBe(true);
+    expect(handle.isSearchInputFocused()).toBe(true);
+    expect(document.activeElement).toBe(input);
+
+    act(() => {
+      expect(handle.handleFindShortcut()).toBe('close');
+    });
+    expect(handle.isOpen()).toBe(false);
+    expect(onDebugEvent).toHaveBeenCalledWith(
+      'shortcut.find.decision',
+      { action: 'open', open: false, inputFocused: false },
+    );
+    expect(onDebugEvent).toHaveBeenCalledWith(
+      'shortcut.find.decision',
+      { action: 'focus', open: true, inputFocused: false },
+    );
+    expect(onDebugEvent).toHaveBeenCalledWith(
+      'shortcut.find.decision',
+      { action: 'close', open: true, inputFocused: true },
+    );
+    pageControl.remove();
+  });
+
   it('logs generic UI events and semantic navigation events', () => {
     mockSearch(true);
     const onDebugEvent = vi.fn();

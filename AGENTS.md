@@ -23,7 +23,7 @@
 
 | macOS | Windows/Linux | Description |
 | --- | --- | --- |
-| `Command+F` | `Ctrl+F` | Open or close Find in Page. |
+| `Command+F` | `Ctrl+F` | Open Find in Page or focus its search field; press again while focused to close it. |
 | `Command+G` | `Ctrl+G` | Open the panel if needed, run any pending search, and move to the next result. |
 | `Command+Shift+G` | `Ctrl+Shift+G` | Open the panel if needed, run any pending search, and move to the previous result. |
 | `Command+E` | `Ctrl+E` | While the panel is open, search for text selected on the page and activate that occurrence without scrolling the page. |

@@ -62,6 +62,8 @@ export interface FindInPageHandle {
   toggle(): void;
   close(): void;
   focus(): void;
+  handleFindShortcut(): 'open' | 'focus' | 'close';
+  isSearchInputFocused(): boolean;
   isOpen(): boolean;
   getDebugState(): Record<string, unknown>;
   closeTransient(): boolean;
@@ -313,6 +315,32 @@ export function App({
       },
       close,
       focus: focusInput,
+      handleFindShortcut() {
+        const input = inputRef.current;
+        const root = input?.getRootNode();
+        const inputFocused = Boolean(
+          input && root && 'activeElement' in root && root.activeElement === input,
+        );
+        if (!isOpenRef.current) {
+          debug('shortcut.find.decision', { action: 'open', open: false, inputFocused });
+          open();
+          return 'open';
+        }
+        if (!inputFocused) {
+          debug('shortcut.find.decision', { action: 'focus', open: true, inputFocused });
+          focusInput();
+          return 'focus';
+        }
+        debug('shortcut.find.decision', { action: 'close', open: true, inputFocused });
+        close();
+        return 'close';
+      },
+      isSearchInputFocused() {
+        const input = inputRef.current;
+        if (!input) return false;
+        const root = input.getRootNode();
+        return 'activeElement' in root && root.activeElement === input;
+      },
       isOpen: () => isOpenRef.current,
       getDebugState() {
         const panel = panelRef.current;
@@ -349,7 +377,7 @@ export function App({
       },
     };
     onReady(handle);
-  }, [activeId, close, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onOpenChange, onReady, setOptionsVisibility, setPanelVisibility]);
+  }, [activeId, close, debug, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onOpenChange, onReady, setOptionsVisibility, setPanelVisibility]);
 
   useEffect(() => {
     if (!isOpen) return;
