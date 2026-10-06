@@ -218,7 +218,9 @@ function isVisibleElement(element: Element, visibilityCache: Map<Element, boolea
 }
 
 function isVisibleTextNode(node: Text, visibilityCache: Map<Element, boolean>): boolean {
-  const parent = node.parentElement;
+  const root = node.getRootNode();
+  const parent = node.parentElement ??
+    (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && 'host' in root ? (root as ShadowRoot).host : null);
   if (!parent || !node.nodeValue || parent.closest(EXCLUDED_SELECTOR) || !isVisibleElement(parent, visibilityCache)) {
     return false;
   }
@@ -247,7 +249,13 @@ function isDocumentFrameVisible(ownerDocument: Document, visibilityCache: Map<El
 }
 
 function getBlockContainer(node: Text): Element | null {
-  return node.parentElement?.closest(BLOCK_CONTAINER_SELECTOR) ?? null;
+  const block = node.parentElement?.closest(BLOCK_CONTAINER_SELECTOR);
+  if (block) return block;
+  const root = node.getRootNode();
+  if (root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE || !('host' in root)) return null;
+  let rootChild = node.parentElement;
+  while (rootChild?.parentElement) rootChild = rootChild.parentElement;
+  return rootChild ?? (root as ShadowRoot).host;
 }
 
 function hasBreakBetween(previous: Text, current: Text, container: Element): boolean {
@@ -407,7 +415,12 @@ function nextFrame(ownerDocument: Document): Promise<void> {
   });
 }
 
-function createPageHighlightStyle(ownerDocument: Document): HTMLStyleElement {
+type HighlightStyleRoot = Document | ShadowRoot;
+
+function createPageHighlightStyle(root: HighlightStyleRoot): HTMLStyleElement {
+  const ownerDocument = root.nodeType === Node.DOCUMENT_NODE
+    ? root as Document
+    : (root as ShadowRoot).ownerDocument;
   const style = ownerDocument.createElement('style');
   style.dataset.findinpageHighlight = 'true';
   style.textContent = `
@@ -422,7 +435,12 @@ function createPageHighlightStyle(ownerDocument: Document): HTMLStyleElement {
       text-decoration-color: #9a6700 !important; text-decoration-thickness: 2px !important;
     }
   `;
-  (ownerDocument.head ?? ownerDocument.documentElement).append(style);
+  if (root.nodeType === Node.DOCUMENT_NODE) {
+    const rootDocument = root as Document;
+    (rootDocument.head ?? rootDocument.documentElement).append(style);
+  } else {
+    root.append(style);
+  }
   return style;
 }
 
@@ -468,6 +486,7 @@ export class PageSearch {
   private locations = new Map<string, MatchLocation>();
   private highlightedDocuments = new Set<Document>();
   private frameHighlightStyles = new Map<Document, HTMLStyleElement>();
+  private shadowHighlightStyles = new Map<ShadowRoot, HTMLStyleElement>();
   private fallbackSpans = new Set<HTMLElement>();
   private mirrors = new Map<TextControl, ControlMirror>();
   private runId = 0;
@@ -483,6 +502,7 @@ export class PageSearch {
   ): SearchTask {
     this.cancelSearch();
     this.clearRenderedHighlights();
+    this.pruneShadowHighlightStyles();
     this.locations.clear();
     const taskState = { id: ++this.runId, cancelled: false };
     this.activeTask = taskState;
@@ -681,6 +701,8 @@ export class PageSearch {
     this.locations.clear();
     for (const style of this.frameHighlightStyles.values()) style.remove();
     this.frameHighlightStyles.clear();
+    for (const style of this.shadowHighlightStyles.values()) style.remove();
+    this.shadowHighlightStyles.clear();
   }
 
   hideHighlights(): void {
@@ -728,6 +750,7 @@ export class PageSearch {
     const rangesByDocument = new Map<Document, Range[]>();
     for (const { document: ownerDocument, range } of this.locations.values()) {
       if (!range?.startContainer.isConnected || !supportsNativeHighlight(ownerDocument)) continue;
+      this.ensureRangeHighlightStyles(range);
       const ranges = rangesByDocument.get(ownerDocument) ?? [];
       ranges.push(range); rangesByDocument.set(ownerDocument, ranges);
     }
@@ -754,6 +777,7 @@ export class PageSearch {
       entries.sort(([, a], [, b]) => b.range!.compareBoundaryPoints(ownerDocument.defaultView!.Range.START_TO_START, a.range!));
       for (const [id, location] of entries) {
       const range = location.range!;
+      this.ensureRangeHighlightStyles(range);
       const walker = location.document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
       const textNodes: Text[] = [];
       let current: Node | null = range.commonAncestorContainer.nodeType === Node.TEXT_NODE ? range.commonAncestorContainer : walker.nextNode();
@@ -913,6 +937,29 @@ export class PageSearch {
 
   private ensureFrameHighlightStyles(ownerDocument: Document): void {
     if (!this.frameHighlightStyles.has(ownerDocument)) this.frameHighlightStyles.set(ownerDocument, createPageHighlightStyle(ownerDocument));
+  }
+
+  private ensureRangeHighlightStyles(range: Range): void {
+    const root = range.startContainer.getRootNode();
+    if (root.nodeType === Node.DOCUMENT_NODE) {
+      const ownerDocument = root as Document;
+      if (ownerDocument !== document) this.ensureFrameHighlightStyles(ownerDocument);
+      return;
+    }
+    if (root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE || !('host' in root)) return;
+    const shadowRoot = root as ShadowRoot;
+    const existing = this.shadowHighlightStyles.get(shadowRoot);
+    if (existing?.getRootNode() === shadowRoot) return;
+    existing?.remove();
+    this.shadowHighlightStyles.set(shadowRoot, createPageHighlightStyle(shadowRoot));
+  }
+
+  private pruneShadowHighlightStyles(): void {
+    for (const [shadowRoot, style] of this.shadowHighlightStyles) {
+      if (shadowRoot.host.isConnected && style.getRootNode() === shadowRoot) continue;
+      style.remove();
+      this.shadowHighlightStyles.delete(shadowRoot);
+    }
   }
 
   private scrollLocationIntoView(location: MatchLocation): void {

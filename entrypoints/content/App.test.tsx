@@ -336,6 +336,22 @@ describe('App close and reopen', () => {
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
   });
 
+  it('ignores extension-owned highlight style mutations', async () => {
+    const search = mockSearch(true);
+    renderAndOpen();
+
+    await act(async () => {
+      const style = document.createElement('style');
+      style.dataset.findinpageHighlight = 'true';
+      document.body.append(style);
+      await Promise.resolve();
+      style.remove();
+      await Promise.resolve();
+    });
+
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
   it('runs a pending query before navigating backward', () => {
     const search = mockSearch(true);
     renderAndOpen();

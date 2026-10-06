@@ -70,8 +70,10 @@ describe('PageSearch', () => {
 
     expect(response.results).toHaveLength(1);
     expect(response.results[0].match).toBe('needle');
+    expect(closedRoot.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
     expect(host.shadowRoot).toBeNull();
     closedSearch.clear();
+    expect(closedRoot.querySelector('style[data-findinpage-highlight]')).toBeNull();
   });
 
   it('searches a closed root that existed before search initialization through the extension DOM API', async () => {
@@ -112,6 +114,9 @@ describe('PageSearch', () => {
     const { response } = await search(closedSearch, 'needle');
 
     expect(response.results).toHaveLength(3);
+    expect([...outer.children].filter((element) => element.matches('style[data-findinpage-highlight]'))).toHaveLength(1);
+    expect(openHost.shadowRoot?.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
+    expect(innerClosed.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
     closedSearch.clear();
   });
 
@@ -184,6 +189,85 @@ describe('PageSearch', () => {
     expect(registry.has(ALL_HIGHLIGHTS_NAME)).toBe(false);
     pageSearch.restoreHighlights(response.results[1].id);
     expect(registry.has(ACTIVE_HIGHLIGHT_NAME)).toBe(true);
+  });
+
+  it('installs and reuses native highlight styles in an open shadow root', async () => {
+    const host = document.createElement('div');
+    host.dataset.component = 'RelativeTime';
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = '<span part="root">4 days ago</span>';
+    document.body.append(host);
+
+    const first = await search(pageSearch, 'ago');
+    expect(first.response.results).toHaveLength(1);
+    expect(shadowRoot.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
+
+    await search(pageSearch, 'days');
+    pageSearch.hideHighlights();
+    pageSearch.restoreHighlights();
+    expect(shadowRoot.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
+
+    pageSearch.clear();
+    expect(shadowRoot.querySelector('style[data-findinpage-highlight]')).toBeNull();
+  });
+
+  it('searches visible text directly under a shadow root', async () => {
+    const host = document.createElement('div');
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.append(document.createTextNode('direct shadow needle'));
+    document.body.append(host);
+
+    const { response } = await search(pageSearch, 'needle');
+
+    expect(response.results).toHaveLength(1);
+    expect(response.results[0].match).toBe('needle');
+    expect(shadowRoot.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
+  });
+
+  it('prunes highlight styles for disconnected shadow roots on the next search', async () => {
+    const host = document.createElement('div');
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = '<p>needle</p>';
+    document.body.append(host);
+    await search(pageSearch, 'needle');
+    expect(shadowRoot.querySelector('style[data-findinpage-highlight]')).not.toBeNull();
+
+    host.remove();
+    document.body.innerHTML = '<p>next needle</p>';
+    await search(pageSearch, 'needle');
+
+    expect(shadowRoot.querySelector('style[data-findinpage-highlight]')).toBeNull();
+  });
+
+  it('highlights a shadow root inside a same-origin iframe with its own registry', async () => {
+    const iframe = document.createElement('iframe');
+    document.body.append(iframe);
+    const frameDocument = iframe.contentDocument!;
+    const frameWindow = iframe.contentWindow!;
+    const frameGlobal = frameWindow as unknown as typeof globalThis;
+    const registry = new Map<string, FakeHighlight>();
+    Object.defineProperty(frameWindow, 'Highlight', { configurable: true, value: FakeHighlight });
+    Object.defineProperty(frameGlobal.CSS, 'highlights', { configurable: true, value: registry });
+    Object.defineProperty(frameGlobal.Element.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [{ width: 100, height: 20 }],
+    });
+    Object.defineProperty(frameGlobal.Range.prototype, 'getClientRects', {
+      configurable: true,
+      value: () => [{ width: 40, height: 16 }],
+    });
+    const host = frameDocument.createElement('div');
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = '<p>iframe needle</p>';
+    frameDocument.body.append(host);
+
+    const { response } = await search(pageSearch, 'needle');
+
+    expect(response.results).toHaveLength(1);
+    expect(registry.get(ALL_HIGHLIGHTS_NAME)?.ranges).toHaveLength(1);
+    expect(shadowRoot.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
+    pageSearch.clear();
+    expect(shadowRoot.querySelector('style[data-findinpage-highlight]')).toBeNull();
   });
 
   it('resolves the exact repeated match selected on the page', async () => {
@@ -266,6 +350,25 @@ describe('PageSearch', () => {
     pageSearch.clear();
     expect(document.querySelector('[data-findinpage-fallback]')).toBeNull();
     expect(document.body.textContent).toBe(originalText);
+  });
+
+  it('styles fallback spans inside a shadow root and restores its text', async () => {
+    removeNativeHighlights();
+    const host = document.createElement('div');
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = '<p>shadow needle text</p>';
+    document.body.append(host);
+    const originalText = shadowRoot.textContent;
+
+    const { response } = await search(pageSearch, 'needle');
+    expect(response.highlightMode).toBe('fallback');
+    expect(shadowRoot.querySelector('[data-findinpage-fallback="match"]')).not.toBeNull();
+    expect(shadowRoot.querySelectorAll('style[data-findinpage-highlight]')).toHaveLength(1);
+
+    pageSearch.clear();
+    expect(shadowRoot.querySelector('[data-findinpage-fallback]')).toBeNull();
+    expect(shadowRoot.querySelector('style[data-findinpage-highlight]')).toBeNull();
+    expect(shadowRoot.textContent).toBe(originalText);
   });
 
   it('returns an error for an invalid regular expression', async () => {
