@@ -27,7 +27,7 @@ import {
 import {
   loadThemePreference,
   normalizeThemePreference,
-  resolveColorScheme,
+  resolveContentColorScheme,
   THEME_STORAGE_KEY,
   type ThemePreference,
 } from '@/lib/theme';
@@ -170,6 +170,7 @@ export default defineContentScript({
     let appHandle: FindInPageHandle | undefined;
     let shadowHostElement: HTMLElement | undefined;
     let shadowHostObserver: MutationObserver | undefined;
+    let pageThemeObserver: MutationObserver | undefined;
     let openWhenReady = false;
     let navigateWhenReady: -1 | 1 | undefined;
     let restoredSession = false;
@@ -179,23 +180,42 @@ export default defineContentScript({
     const currentUrl = normalizePageUrl(location.href);
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
     let themePreference: ThemePreference = 'system';
+    let appliedThemeKey: string | undefined;
 
     if (location.origin === 'https://findin.page') {
       document.documentElement.dataset.findinpageExtension = '1';
       document.dispatchEvent(new CustomEvent('findinpage:extension-ready'));
     }
 
-    const syncColorScheme = () => {
-      shadowHostElement?.setAttribute(
-        'data-findinpage-color-scheme',
-        resolveColorScheme(themePreference, systemColorScheme.matches),
+    const syncColorScheme = (trigger: string) => {
+      if (!shadowHostElement) return;
+      const resolved = resolveContentColorScheme(
+        themePreference,
+        document.documentElement,
+        systemColorScheme.matches,
       );
+      const themeKey = `${themePreference}:${resolved.colorScheme}:${resolved.source}`;
+      shadowHostElement.setAttribute('data-findinpage-color-scheme', resolved.colorScheme);
+      if (themeKey === appliedThemeKey) return;
+      appliedThemeKey = themeKey;
+      logContentDebug('theme.applied', {
+        trigger,
+        preference: themePreference,
+        colorScheme: resolved.colorScheme,
+        source: resolved.source,
+      });
     };
+
+    pageThemeObserver = new MutationObserver(() => syncColorScheme('page-mutation'));
+    pageThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-theme'],
+    });
 
     void loadThemePreference().then((preference) => {
       if (contextInvalidated) return;
       themePreference = preference;
-      syncColorScheme();
+      syncColorScheme('preference-loaded');
     });
 
     const onThemeStorageChange = (
@@ -204,10 +224,11 @@ export default defineContentScript({
     ) => {
       if (areaName !== 'local' || !changes[THEME_STORAGE_KEY]) return;
       themePreference = normalizeThemePreference(changes[THEME_STORAGE_KEY].newValue);
-      syncColorScheme();
+      syncColorScheme('storage-change');
     };
 
-    systemColorScheme.addEventListener('change', syncColorScheme);
+    const onSystemColorSchemeChange = () => syncColorScheme('system-change');
+    systemColorScheme.addEventListener('change', onSystemColorSchemeChange);
     browser.storage.onChanged.addListener(onThemeStorageChange);
 
     const onFindShortcut = (event: KeyboardEvent) => {
@@ -382,7 +403,8 @@ export default defineContentScript({
       window.removeEventListener('keydown', onSearchSelectionShortcut, { capture: true });
       window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
       document.removeEventListener(TOOLBAR_TOGGLE_EVENT, onToolbarToggle);
-      systemColorScheme.removeEventListener('change', syncColorScheme);
+      systemColorScheme.removeEventListener('change', onSystemColorSchemeChange);
+      pageThemeObserver?.disconnect();
       shadowHostObserver?.disconnect();
       try {
         browser.runtime.onMessage.removeListener(onMessage);
@@ -464,7 +486,7 @@ export default defineContentScript({
         });
         shadowHostObserver.observe(document.documentElement, { childList: true });
         shadowHost.dataset.findinpageHost = 'true';
-        syncColorScheme();
+        syncColorScheme('ui-mount');
         shadowHost.style.margin = '0';
         shadowHost.style.padding = '0';
         shadowHost.style.border = '0';

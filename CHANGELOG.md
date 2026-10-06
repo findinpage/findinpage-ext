@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-10-07
+
+### Fixed
+
+- Fixed automatic appearance so the search panel follows each website's light
+  or dark theme, including runtime theme changes, and falls back to the system
+  preference only when the website does not declare one.
+
 ## [1.0.5] - 2026-10-06
 
 ### Fixed
@@ -67,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added localized settings, light and dark themes, and per-tab search-session
   restoration across page refreshes.
 
+[1.0.6]: https://github.com/findinpage/findinpage-ext/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/findinpage/findinpage-ext/compare/v1.0.3...v1.0.5
 [1.0.3]: https://github.com/findinpage/findinpage-ext/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/findinpage/findinpage-ext/compare/v1.0.1...v1.0.2

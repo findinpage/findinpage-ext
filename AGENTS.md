@@ -59,6 +59,7 @@
 ### Important Architecture Rules
 
 - The content UI must remain mounted with WXT's `createShadowRootUi` and use `cssInjectionMode: 'ui'`. Do not inject the Tailwind stylesheet into the host page.
+- The automatic appearance setting is stored as `system` for backward compatibility, but its user-visible meaning is **Follow website**. In content pages, resolve explicit website theme signals before falling back to `prefers-color-scheme`; explicit extension light/dark preferences always win. Observe runtime website theme changes and disconnect all theme observers and media-query listeners on invalidation. Do not remove website-theme detection because the internal storage value is named `system`. Any theme change must check settings copy, the content panel, the standalone demo, and theme tests together.
 - Keep page search and highlight behavior in `PageSearch`. Changes to matching, selection, or cleanup must not leave highlights or listeners behind after the panel closes or the content script is destroyed.
 - The host page may mutate its DOM at any time. When retaining references to page nodes, ranges, or elements, continue checking `isConnected` and handle stale search results safely.
 - DOM constructors, ranges, computed styles, highlights, and observers used inside iframes must come from the node's owning `document` or `window`; cross-realm `instanceof` checks and top-level-only registries are not reliable.

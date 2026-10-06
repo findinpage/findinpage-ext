@@ -50,9 +50,9 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 - **Per-tab state:** each tab retains its own query, selected result, and result
   list. Closing and reopening the panel restores that state without moving the
   page or rerunning an unchanged search.
-- **Theme-aware isolated UI:** the panel follows the page or system light/dark
-  preference and runs inside a Shadow DOM so website styles do not leak into
-  it.
+- **Theme-aware isolated UI:** the panel follows the website's light/dark theme,
+  falling back to the system preference when the website does not declare one.
+  It runs inside a Shadow DOM so website styles do not leak into it.
 - **Localized interface:** the panel and settings are available in English,
   Simplified Chinese, Traditional Chinese, Japanese, and Korean, with an
   automatic browser-language mode.
@@ -64,8 +64,9 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 
 ## Settings
 
-Open the extension's settings page to choose its display language, light or dark
-theme, and search behavior. **Keep results highlighted after closing** leaves
+Open the extension's settings page to choose its display language, follow the
+website's appearance (with a system fallback), force a light or dark theme, and
+configure search behavior. **Keep results highlighted after closing** leaves
 the current matches and active result highlighted when the panel closes. It is
 off by default, and changes apply immediately to every open tab. The preference
 does not store the query, results, or page content.

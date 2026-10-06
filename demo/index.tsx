@@ -13,6 +13,7 @@ import {
 } from '@/entrypoints/content/search-options';
 import panelStyles from '@/assets/tailwind.css?inline';
 import { getBrowserLocale, resolveLocale, type SupportedLocale } from '@/lib/i18n';
+import { resolvePageColorScheme } from '@/lib/theme';
 import {
   DEFAULT_SEARCH_OPTIONS,
   PageSearch,
@@ -82,25 +83,6 @@ const demoSearchOptionsStore: SearchOptionsStore = {
   },
 };
 
-function resolveColorScheme(): 'light' | 'dark' {
-  const root = document.documentElement;
-  if (
-    root.style.colorScheme === 'dark' ||
-    root.classList.contains('dark') ||
-    root.dataset.theme === 'dark'
-  ) {
-    return 'dark';
-  }
-  if (
-    root.style.colorScheme === 'light' ||
-    root.classList.contains('light') ||
-    root.dataset.theme === 'light'
-  ) {
-    return 'light';
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
 function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
   const existing = document.querySelector<HTMLElement>('[data-findinpage-demo-host]');
   if (existing) {
@@ -120,7 +102,10 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
 
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
   const syncColorScheme = () => {
-    host.dataset.findinpageColorScheme = resolveColorScheme();
+    host.dataset.findinpageColorScheme = resolvePageColorScheme(
+      document.documentElement,
+      colorScheme.matches,
+    ).colorScheme;
   };
   syncColorScheme();
 
