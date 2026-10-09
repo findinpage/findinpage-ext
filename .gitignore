@@ -15,6 +15,30 @@ stats-*.json
 .wxt
 web-ext.config.ts
 
+# Xcode
+xcuserdata/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+timeline.xctimeline
+playground.xcworkspace
+.build/
+Carthage/Build/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+build/
+DerivedData/
+.build-xcode
+*.xcodeproj
+.env
+
+# Xcode Cloud requires committed SwiftPM lockfiles when automatic resolution is disabled.
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -14,6 +14,7 @@ import {
   type DebugEntry,
   type DebugLogMessage,
 } from '@/lib/debug-log';
+import { resolveToolbarAction } from '@/lib/toolbar-action';
 
 type FindInPageResponse = {
   ok: true;
@@ -22,6 +23,10 @@ type FindInPageResponse = {
 const TOOLBAR_TOGGLE_EVENT = 'findinpage:toolbar-toggle';
 
 export default defineBackground(() => {
+  const legacyBrowser = browser as typeof browser & {
+    browserAction?: typeof browser.action;
+  };
+  const toolbarAction = resolveToolbarAction(browser.action, legacyBrowser.browserAction);
   const updateQueues = new Map<number, Promise<void>>();
   let debugEnabled = false;
   let debugWriteQueue = Promise.resolve();
@@ -76,7 +81,7 @@ export default defineBackground(() => {
     if (!response?.ok) throw new Error('Find in Page content script did not respond.');
   };
 
-  browser.action.onClicked.addListener(async (tab) => {
+  toolbarAction.onClicked.addListener(async (tab) => {
     if (tab.id === undefined) return;
     logBackground('toolbar.clicked', undefined, tab.id);
 

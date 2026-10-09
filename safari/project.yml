@@ -1,0 +1,136 @@
+name: Find in Page
+
+options:
+  bundleIdPrefix: page.findin
+  minimumXcodeGenVersion: 2.38.0
+  createIntermediateGroups: true
+  fileTypes:
+    icon:
+      file: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+    MACOSX_DEPLOYMENT_TARGET: 10.14
+    SWIFT_VERSION: 5.0
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0
+    INFOPLIST_KEY_NSHumanReadableCopyright: ""
+
+targets:
+  Find in Page (macOS):
+    type: application
+    platform: macOS
+    sources:
+      - path: "Shared (App)"
+        excludes:
+          - "**/.DS_Store"
+      - path: "macOS (App)"
+        excludes:
+          - Info.plist
+          - "**/.DS_Store"
+    dependencies:
+      - target: Find in Page Extension (macOS)
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: page.findin.FindinPage
+        PRODUCT_NAME: Find in Page
+        INFOPLIST_KEY_CFBundleDisplayName: "Find in Page: See Every Match"
+
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: "macOS (App)/Info.plist"
+
+        CODE_SIGN_STYLE: Automatic
+
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSMainStoryboardFile: Main
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/../Frameworks
+        OTHER_LDFLAGS: -framework SafariServices -framework WebKit
+        REGISTER_APP_GROUPS: YES
+        STRING_CATALOG_GENERATE_SYMBOLS: YES
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+
+  Find in Page Extension (macOS):
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: "Shared (Extension)"
+        excludes:
+          - "**/.DS_Store"
+      - path: "macOS (Extension)"
+        excludes:
+          - Info.plist
+          - "**/.DS_Store"
+    preBuildScripts:
+      - name: Build Safari Web Extension
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+
+          REPO_ROOT="$(CDPATH= cd -- "$SRCROOT/.." && pwd)"
+          cd "$REPO_ROOT"
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/Library/pnpm:$PATH"
+
+          if ! command -v pnpm >/dev/null 2>&1; then
+            echo "error: pnpm is required to build the Safari Web Extension."
+            exit 1
+          fi
+
+          pnpm build:safari
+
+          SOURCE_DIR="$REPO_ROOT/.output/safari-mv2"
+          RESOURCE_DIR="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          mkdir -p "$RESOURCE_DIR"
+
+          for item in background.js chunks content-scripts manifest.json options.html _locales icon assets; do
+            rm -rf "$RESOURCE_DIR/$item"
+            cp -R "$SOURCE_DIR/$item" "$RESOURCE_DIR/$item"
+          done
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: page.findin.FindinPage.Extension
+        PRODUCT_NAME: Find in Page Extension
+        INFOPLIST_KEY_CFBundleDisplayName: "Find in Page: See Every Match Extension"
+
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: "macOS (Extension)/Info.plist"
+
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        ENABLE_USER_SELECTED_FILES: readonly
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        LD_RUNPATH_SEARCH_PATHS: $(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks
+        OTHER_LDFLAGS: -framework SafariServices
+        SKIP_INSTALL: YES
+        STRING_CATALOG_GENERATE_SYMBOLS: YES
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+
+schemes:
+  Find in Page (macOS):
+    build:
+      targets:
+        Find in Page (macOS): all
+        Find in Page Extension (macOS): all
+    run:
+      config: Debug
+    archive:
+      config: Release
