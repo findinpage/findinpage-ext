@@ -10,7 +10,7 @@ build does not mean that a Safari release is available in the App Store.
 
 ## Requirements
 
-- macOS with Xcode
+- macOS 13 or later with Xcode
 - XcodeGen 2.38.0 or later
 - Node.js 20 or later
 - pnpm
