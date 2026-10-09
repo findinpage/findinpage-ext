@@ -10,6 +10,36 @@ cd "$REPO_ROOT"
 
 PROJECT_DIR="safari"
 PROJECT_SPEC="${PROJECT_DIR}/project.yml"
+NODE_VERSION="24.15.0"
+PNPM_VERSION="10.13.1"
+CI_TOOLS_DIR="${REPO_ROOT}/.xcode-cloud"
+NODE_DIR="${CI_TOOLS_DIR}/node"
+
+echo "==> Xcode Cloud post-clone: preparing Node.js ${NODE_VERSION} and pnpm ${PNPM_VERSION}"
+
+export PATH="${NODE_DIR}/bin:${CI_TOOLS_DIR}/bin:${PATH}"
+
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  case "$(uname -m)" in
+    arm64) NODE_ARCH="arm64" ;;
+    x86_64) NODE_ARCH="x64" ;;
+    *)
+      echo "error: unsupported macOS architecture: $(uname -m)"
+      exit 1
+      ;;
+  esac
+
+  NODE_ARCHIVE="node-v${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
+  mkdir -p "$NODE_DIR"
+  curl -fL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE}" |
+    tar -xz -C "$NODE_DIR" --strip-components=1
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  npm install --global --prefix "$CI_TOOLS_DIR" "pnpm@${PNPM_VERSION}"
+fi
+
+pnpm install --frozen-lockfile
 
 if [ ! -f "$PROJECT_SPEC" ]; then
   echo "error: project.yml not found: ${REPO_ROOT}/${PROJECT_SPEC}"

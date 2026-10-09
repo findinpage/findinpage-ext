@@ -84,7 +84,7 @@ targets:
 
           REPO_ROOT="$(CDPATH= cd -- "$SRCROOT/.." && pwd)"
           cd "$REPO_ROOT"
-          export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/Library/pnpm:$PATH"
+          export PATH="$REPO_ROOT/.xcode-cloud/node/bin:$REPO_ROOT/.xcode-cloud/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/Library/pnpm:$PATH"
 
           if ! command -v pnpm >/dev/null 2>&1; then
             echo "error: pnpm is required to build the Safari Web Extension."

@@ -32,6 +32,7 @@ fastlane/test_output
 build/
 DerivedData/
 .build-xcode
+.xcode-cloud
 *.xcodeproj
 .env
 

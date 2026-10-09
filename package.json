@@ -3,6 +3,7 @@
   "description": "Context-rich find-in-page search for Chrome",
   "private": true,
   "version": "1.0.6",
+  "packageManager": "pnpm@10.13.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",

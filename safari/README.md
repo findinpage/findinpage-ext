@@ -95,11 +95,13 @@ extension.
 
 Xcode Cloud discovers custom scripts only from the repository-root
 `ci_scripts/` directory. Those files are intentionally small entry points that
-delegate to the implementations in `safari/ci_scripts/`. The post-clone script
-generates `safari/Find in Page.xcodeproj` before Xcode Cloud starts the build.
-
-The Xcode Cloud workflow must provide `DEVELOPMENT_TEAM`, Node.js 20 or later,
-pnpm, and installed JavaScript dependencies before the Extension target builds.
+delegate to the implementations in `safari/ci_scripts/`. When the build image
+does not provide Node.js, the post-clone script downloads the pinned official
+Node.js distribution for the current Mac architecture. It installs the pinned
+pnpm version into the ignored `.xcode-cloud/` directory, installs JavaScript
+dependencies with the committed lockfile, and generates
+`safari/Find in Page.xcodeproj` before Xcode Cloud starts the build. The
+workflow does not require Node.js or pnpm to be preinstalled.
 
 ## Directory layout
 
