@@ -82,4 +82,11 @@ if [ ! -d "${PROJECT_DIR}/Find in Page.xcodeproj" ]; then
   exit 1
 fi
 
+PBXPROJ="${PROJECT_DIR}/Find in Page.xcodeproj/project.pbxproj"
+if grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*\}' "$PBXPROJ"; then
+  echo "error: generated Xcode project contains an unresolved environment placeholder:"
+  grep -En '\$\{[A-Za-z_][A-Za-z0-9_]*\}' "$PBXPROJ"
+  exit 1
+fi
+
 echo "==> Generated Find in Page.xcodeproj successfully"

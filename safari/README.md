@@ -32,24 +32,11 @@ changing `project.yml` or cloning the repository:
 pnpm xcode:generate
 ```
 
-To configure signing, export the Apple team ID before generating the project:
-
-```bash
-export DEVELOPMENT_TEAM=YOUR_TEAM_ID
-pnpm xcode:generate
-```
-
-Alternatively, copy `safari/.env.example` to `safari/.env`, fill in the value,
-and load it into the shell before generating:
-
-```bash
-set -a
-. safari/.env
-set +a
-pnpm xcode:generate
-```
-
-The `.env` file is local-only and must not be committed.
+For a signed local build, open the generated project and select the same Apple
+Development team for the app and extension targets under **Signing &
+Capabilities**. The project specification intentionally does not set
+`DEVELOPMENT_TEAM`: Xcode Cloud supplies managed signing during distribution,
+while each local developer can select their own team in Xcode.
 
 ## Build
 
@@ -103,6 +90,9 @@ pnpm version into the ignored `.xcode-cloud/` directory, installs JavaScript
 dependencies with the committed lockfile, and generates
 `safari/Find in Page.xcodeproj` before Xcode Cloud starts the build. The
 workflow does not require Node.js or pnpm to be preinstalled.
+The generated project leaves `DEVELOPMENT_TEAM` unset so Xcode Cloud can apply
+the workflow's managed signing identity and provisioning profiles during
+archive export.
 
 ## Directory layout
 
