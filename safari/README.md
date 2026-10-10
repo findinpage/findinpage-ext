@@ -4,9 +4,10 @@ This directory contains the macOS container app and Safari Web Extension
 wrapper for Find in Page. The Xcode project is generated from `project.yml`
 with XcodeGen.
 
-Safari support is currently planned and is not publicly distributed. These
-instructions are for local development and testing; the presence of a local
-build does not mean that a Safari release is available in the App Store.
+The macOS Safari extension is publicly available as a
+[TestFlight beta](https://testflight.apple.com/join/vJPBktr6). It is not an App
+Store release, and this macOS target does not indicate iPhone or iPad support.
+The instructions below remain available for local development and testing.
 
 ## Requirements
 

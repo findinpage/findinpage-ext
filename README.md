@@ -1,6 +1,6 @@
 # Find in Page
 
-Find in Page is a free, open-source Chrome extension that replaces the ordinary
+Find in Page is a free, open-source browser extension that replaces the ordinary
 find-in-page interaction with a compact list of every match and its surrounding
 context. It keeps the familiar `Command+F` / `Ctrl+F` shortcut while making it
 easier to scan a page and jump directly to the result you need.
@@ -9,6 +9,8 @@ easier to scan a page and jump directly to the result you need.
 
 - Website: [findin.page](https://findin.page)
 - Chrome Web Store: [Install Find in Page](https://chromewebstore.google.com/detail/ghgneafbinoihjfpmcdglhmoieekmnji)
+- Firefox Add-ons: [Install Find in Page](https://addons.mozilla.org/firefox/addon/find-in-page-see-every-match/)
+- Safari for macOS: [Join the TestFlight beta](https://testflight.apple.com/join/vJPBktr6)
 - Releases: [Download from GitHub](https://github.com/findinpage/findinpage-ext/releases)
 - Source: [github.com/findinpage/findinpage-ext](https://github.com/findinpage/findinpage-ext)
 - Support: [support@findin.page](mailto:support@findin.page)
@@ -113,23 +115,23 @@ replaced or the extension is destroyed.
 
 ## Browser support
 
-Find in Page is currently published for Chrome. Edge and Firefox releases are
-planned; the current codebase can already be built for Chromium and Firefox,
-but those packages are not yet distributed through their browser stores. Safari
-support is planned and is not implemented in this repository today.
+Find in Page is currently available for Chrome and Firefox, plus Safari for
+macOS as a public TestFlight beta. Edge is implemented and buildable, but its
+store release is still planned. The Safari beta is not an App Store release and
+does not indicate iPhone or iPad support.
 
 | Feature | Chrome | Edge | Firefox | Safari |
 | --- | :---: | :---: | :---: | :---: |
-| Available today | Yes | Planned | Planned | Planned |
-| Open source and free to use | Yes | Yes | Yes | No |
-| Light and dark themes | Yes | Yes | Yes | No |
-| Context-rich results and page highlights | Yes | Yes | Yes | No |
-| Shadow DOM search | Yes | Yes | Yes | No |
-| Same-origin iframe search | Yes | Yes | Yes | No |
-| Live page updates | Yes | Yes | Yes | No |
-| `Command+F` / `Ctrl+F` and result-navigation shortcuts | Yes | Yes | Yes | No |
-| Regular expressions | Yes | Yes | Yes | No |
-| Case-sensitive and Unicode whole-word search | Yes | Yes | Yes | No |
+| Available today | Yes | Planned | Yes | Yes |
+| Open source and free to use | Yes | Yes | Yes | Yes |
+| Light and dark themes | Yes | Yes | Yes | Yes |
+| Context-rich results and page highlights | Yes | Yes | Yes | Yes |
+| Shadow DOM search | Yes | Yes | Yes | Yes |
+| Same-origin iframe search | Yes | Yes | Yes | Yes |
+| Live page updates | Yes | Yes | Yes | Yes |
+| `Command+F` / `Ctrl+F` and result-navigation shortcuts | Yes | Yes | Yes | Yes |
+| Regular expressions | Yes | Yes | Yes | Yes |
+| Case-sensitive and Unicode whole-word search | Yes | Yes | Yes | Yes |
 
 ## Development
 
@@ -138,6 +140,7 @@ Requirements:
 - Node.js 20 or later
 - pnpm
 - Google Chrome 105 or later for Chrome development
+- macOS 13 or later with Xcode and XcodeGen for Safari development
 
 Install dependencies and start WXT in development mode:
 
@@ -147,6 +150,8 @@ pnpm dev
 ```
 
 For Firefox development, run `pnpm dev:firefox`.
+
+For Safari build and signing instructions, see [`safari/README.md`](safari/README.md).
 
 WXT opens a development browser with the extension loaded. To load a production build manually:
 
@@ -162,6 +167,7 @@ Useful checks:
 pnpm compile
 pnpm build
 pnpm build:firefox
+pnpm build:safari
 pnpm test
 ```
 

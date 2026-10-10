@@ -4,7 +4,7 @@
 
 - **Description**: A browser extension that replaces the native find-in-page experience. It lists every match on the current page with surrounding context and supports result navigation, page highlighting, per-tab search state, and configurable case-sensitive, Unicode whole-word, and regular-expression matching.
 - **Tech stack**: WXT 0.20, React 19, TypeScript 5.9, Tailwind CSS 4, Base UI, locally maintained Shadcn components, and Lucide React.
-- **Runtime requirements**: Node.js 20+, pnpm, and Chrome 105+. Firefox development and build scripts are also available.
+- **Runtime requirements**: Node.js 20+, pnpm, and Chrome 105+. Firefox development and build scripts are available; Safari builds additionally require macOS 13+, Xcode, and XcodeGen.
 - **Core scope**: Search covers visible Light DOM, Shadow DOM regardless of open/closed state, same-origin nested iframes, visible textarea values, and visible `text`, `search`, `email`, `tel`, and `url` input values. It does not cover passwords, non-text controls, cross-origin iframes, Canvas/WebGL, images, video, or virtualized content that has not been mounted.
 
 ## 2. Common Commands
@@ -15,6 +15,7 @@
 - **Run TypeScript checks**: `pnpm compile`
 - **Build the Chrome extension**: `pnpm build`
 - **Build the Firefox extension**: `pnpm build:firefox`
+- **Build the Safari extension bundle**: `pnpm build:safari`
 - **Package the Chrome extension**: `pnpm zip`
 - **Package the Firefox extension**: `pnpm zip:firefox`
 - **Tests**: Run `pnpm test` for the Vitest/jsdom search and highlighting suite. Before submitting changes, also run `pnpm compile` and `pnpm build`, then manually verify any affected extension interactions.
