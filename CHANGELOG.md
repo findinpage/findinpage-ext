@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-10-15
+
+### Added
+
+- Added Firefox and Safari distribution support, including Safari packaging
+  and Xcode Cloud signing configuration.
+
+### Fixed
+
+- Kept the search panel visible and interactive above page-owned popovers and
+  other top-layer UI by promoting it through a fresh top-layer wrapper.
+
 ## [1.0.6] - 2026-10-07
 
 ### Fixed
@@ -75,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added localized settings, light and dark themes, and per-tab search-session
   restoration across page refreshes.
 
+[1.0.7]: https://github.com/findinpage/findinpage-ext/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/findinpage/findinpage-ext/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/findinpage/findinpage-ext/compare/v1.0.3...v1.0.5
 [1.0.3]: https://github.com/findinpage/findinpage-ext/compare/v1.0.2...v1.0.3

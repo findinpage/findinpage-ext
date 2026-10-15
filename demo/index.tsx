@@ -14,6 +14,7 @@ import {
 import panelStyles from '@/assets/tailwind.css?inline';
 import { getBrowserLocale, resolveLocale, type SupportedLocale } from '@/lib/i18n';
 import { resolvePageColorScheme } from '@/lib/theme';
+import { keepPopoverHostOnTop } from '@/lib/top-layer-host';
 import {
   DEFAULT_SEARCH_OPTIONS,
   PageSearch,
@@ -92,13 +93,19 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
   const host = document.createElement('div');
   host.dataset.findinpageHost = 'true';
   host.dataset.findinpageDemoHost = 'true';
-  host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
+  host.style.cssText = 'position:fixed;inset:0;margin:0;border:0;background:transparent;z-index:2147483647;pointer-events:none;';
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = panelStyles;
   const container = document.createElement('div');
   shadow.append(style, container);
   document.documentElement.append(host);
+  const topLayerHostController = keepPopoverHostOnTop(host, (trigger) => {
+    host.dataset.findinpageLastPromotion = trigger;
+    host.dataset.findinpagePromotionCount = String(
+      Number(host.dataset.findinpagePromotionCount ?? '0') + 1,
+    );
+  });
 
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
   const syncColorScheme = () => {
@@ -173,6 +180,9 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
             handle.openAndFocus(query);
           }
         }}
+        onOpenChange={(isOpen) => {
+          if (isOpen) topLayerHostController.promote('panel-opened');
+        }}
       />
     </React.StrictMode>,
   );
@@ -244,6 +254,7 @@ function mount(options: FindInPageDemoOptions): FindInPageDemoHandle {
       window.removeEventListener('keydown', onEscape, { capture: true });
       themeObserver?.disconnect();
       colorScheme.removeEventListener('change', syncColorScheme);
+      topLayerHostController.destroy();
       appHandle?.destroy();
       testSearch?.clear();
       root.unmount();

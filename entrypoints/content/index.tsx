@@ -37,6 +37,7 @@ import {
   normalizeKeepHighlightsOnClose,
 } from '@/lib/highlight-preference';
 import { logContentDebug } from '@/lib/debug-log';
+import { keepPopoverHostOnTop, type TopLayerHostController } from '@/lib/top-layer-host';
 
 type MountedUi = {
   root: Root;
@@ -170,6 +171,7 @@ export default defineContentScript({
     let appHandle: FindInPageHandle | undefined;
     let shadowHostElement: HTMLElement | undefined;
     let shadowHostObserver: MutationObserver | undefined;
+    let topLayerHostController: TopLayerHostController | undefined;
     let pageThemeObserver: MutationObserver | undefined;
     let openWhenReady = false;
     let navigateWhenReady: -1 | 1 | undefined;
@@ -403,6 +405,7 @@ export default defineContentScript({
       window.removeEventListener('keydown', onSearchSelectionShortcut, { capture: true });
       window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
       document.removeEventListener(TOOLBAR_TOGGLE_EVENT, onToolbarToggle);
+      topLayerHostController?.destroy();
       systemColorScheme.removeEventListener('change', onSystemColorSchemeChange);
       pageThemeObserver?.disconnect();
       shadowHostObserver?.disconnect();
@@ -498,10 +501,10 @@ export default defineContentScript({
         shadowHost.style.setProperty('-webkit-text-size-adjust', 'none');
         shadowHost.style.setProperty('zoom', '1');
 
-        if ('showPopover' in shadowHost) {
-          shadowHost.setAttribute('popover', 'manual');
-          shadowHost.showPopover();
-        }
+        topLayerHostController?.destroy();
+        topLayerHostController = keepPopoverHostOnTop(shadowHost, (trigger) => {
+          logContentDebug('ui.host.promoted', { trigger });
+        });
 
         const root = createRoot(container);
         root.render(
@@ -512,6 +515,7 @@ export default defineContentScript({
               onDebugEvent={logContentDebug}
               onOpenChange={(isOpen) => {
                 logContentDebug('panel.open-change', { isOpen });
+                if (isOpen) topLayerHostController?.promote('panel-opened');
                 updateSearchSession({ isOpen });
               }}
               onQueryChange={(query, searchOptions) => updateSearchSession({
@@ -572,6 +576,8 @@ export default defineContentScript({
         appHandle = undefined;
         shadowHostObserver?.disconnect();
         shadowHostObserver = undefined;
+        topLayerHostController?.destroy();
+        topLayerHostController = undefined;
         shadowHostElement = undefined;
         mounted?.root.unmount();
       },
