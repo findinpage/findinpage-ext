@@ -37,6 +37,7 @@ import {
   normalizeKeepHighlightsOnClose,
 } from '@/lib/highlight-preference';
 import { logContentDebug } from '@/lib/debug-log';
+import { keepPopoverHostOnTop, type TopLayerHostController } from '@/lib/top-layer-host';
 
 type MountedUi = {
   root: Root;
@@ -170,7 +171,7 @@ export default defineContentScript({
     let appHandle: FindInPageHandle | undefined;
     let shadowHostElement: HTMLElement | undefined;
     let shadowHostObserver: MutationObserver | undefined;
-    let promoteShadowHostAfterToggle = false;
+    let topLayerHostController: TopLayerHostController | undefined;
     let pageThemeObserver: MutationObserver | undefined;
     let openWhenReady = false;
     let navigateWhenReady: -1 | 1 | undefined;
@@ -182,41 +183,6 @@ export default defineContentScript({
     const systemColorScheme = window.matchMedia('(prefers-color-scheme: dark)');
     let themePreference: ThemePreference = 'system';
     let appliedThemeKey: string | undefined;
-
-    const promoteShadowHost = (trigger: string) => {
-      if (!shadowHostElement?.isConnected || typeof shadowHostElement.showPopover !== 'function') {
-        return;
-      }
-
-      try {
-        if (shadowHostElement.matches(':popover-open')) shadowHostElement.hidePopover();
-        shadowHostElement.showPopover();
-        logContentDebug('ui.host.promoted', { trigger });
-      } catch {
-        // The host can disconnect between the guard and the popover operation.
-      }
-    };
-
-    const onDocumentPopoverToggle = (event: Event) => {
-      const target = event.target;
-      if (
-        target === shadowHostElement ||
-        !(target instanceof HTMLElement) ||
-        !target.hasAttribute('popover') ||
-        (event as ToggleEvent).newState !== 'open' ||
-        promoteShadowHostAfterToggle
-      ) {
-        return;
-      }
-
-      promoteShadowHostAfterToggle = true;
-      queueMicrotask(() => {
-        promoteShadowHostAfterToggle = false;
-        promoteShadowHost('page-popover-opened');
-      });
-    };
-
-    document.addEventListener('toggle', onDocumentPopoverToggle, { capture: true });
 
     if (location.origin === 'https://findin.page') {
       document.documentElement.dataset.findinpageExtension = '1';
@@ -439,7 +405,7 @@ export default defineContentScript({
       window.removeEventListener('keydown', onSearchSelectionShortcut, { capture: true });
       window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
       document.removeEventListener(TOOLBAR_TOGGLE_EVENT, onToolbarToggle);
-      document.removeEventListener('toggle', onDocumentPopoverToggle, { capture: true });
+      topLayerHostController?.destroy();
       systemColorScheme.removeEventListener('change', onSystemColorSchemeChange);
       pageThemeObserver?.disconnect();
       shadowHostObserver?.disconnect();
@@ -535,10 +501,10 @@ export default defineContentScript({
         shadowHost.style.setProperty('-webkit-text-size-adjust', 'none');
         shadowHost.style.setProperty('zoom', '1');
 
-        if (typeof shadowHost.showPopover === 'function') {
-          shadowHost.setAttribute('popover', 'manual');
-          promoteShadowHost('ui-mount');
-        }
+        topLayerHostController?.destroy();
+        topLayerHostController = keepPopoverHostOnTop(shadowHost, (trigger) => {
+          logContentDebug('ui.host.promoted', { trigger });
+        });
 
         const root = createRoot(container);
         root.render(
@@ -549,7 +515,7 @@ export default defineContentScript({
               onDebugEvent={logContentDebug}
               onOpenChange={(isOpen) => {
                 logContentDebug('panel.open-change', { isOpen });
-                if (isOpen) promoteShadowHost('panel-opened');
+                if (isOpen) topLayerHostController?.promote('panel-opened');
                 updateSearchSession({ isOpen });
               }}
               onQueryChange={(query, searchOptions) => updateSearchSession({
@@ -610,6 +576,8 @@ export default defineContentScript({
         appHandle = undefined;
         shadowHostObserver?.disconnect();
         shadowHostObserver = undefined;
+        topLayerHostController?.destroy();
+        topLayerHostController = undefined;
         shadowHostElement = undefined;
         mounted?.root.unmount();
       },
