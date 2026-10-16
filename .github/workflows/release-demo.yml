@@ -1,4 +1,4 @@
-name: Release web demo
+name: Release assets
 
 on:
   release:
@@ -19,16 +19,29 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm compile
-      - run: pnpm build
-      - run: pnpm build:firefox
+      - run: pnpm zip
+      - run: pnpm zip:firefox
       - run: pnpm build:demo
-      - name: Upload demo release assets
+      - name: Generate asset checksums
+        run: >-
+          shasum -a 256
+          .output/findinpage-*-chrome.zip
+          .output/findinpage-*-firefox.zip
+          .output/findinpage-*-sources.zip
+          dist/demo/findinpage-demo.js
+          dist/demo/manifest.json
+          > SHA256SUMS.txt
+      - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release upload "${{ github.event.release.tag_name }}"
+          .output/findinpage-*-chrome.zip
+          .output/findinpage-*-firefox.zip
+          .output/findinpage-*-sources.zip
           dist/demo/findinpage-demo.js
           dist/demo/manifest.json
+          SHA256SUMS.txt
           --clobber
       - name: Notify website repository
         if: ${{ env.WEB_REPO_TOKEN != '' }}
