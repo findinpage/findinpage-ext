@@ -37,6 +37,7 @@ import {
   normalizeKeepHighlightsOnClose,
 } from '@/lib/highlight-preference';
 import { logContentDebug } from '@/lib/debug-log';
+import { isSearchableDocumentContentType } from '@/lib/searchable-document';
 import { keepPopoverHostOnTop, type TopLayerHostController } from '@/lib/top-layer-host';
 
 type MountedUi = {
@@ -161,6 +162,13 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
 
   async main(ctx) {
+    if (!isSearchableDocumentContentType(document.contentType)) {
+      logContentDebug('content.main.skipped', {
+        contentType: document.contentType,
+      });
+      return;
+    }
+
     const navigationEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
     logContentDebug('content.main.start', {
       readyState: document.readyState,

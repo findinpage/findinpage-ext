@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-10-18
+
+### Fixed
+
+- Prevented standalone audio and other non-HTML documents from activating the
+  extension or intercepting the browser's native find shortcut.
+
 ## [1.0.7] - 2026-10-15
 
 ### Added
@@ -87,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added localized settings, light and dark themes, and per-tab search-session
   restoration across page refreshes.
 
+[1.0.8]: https://github.com/findinpage/findinpage-ext/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/findinpage/findinpage-ext/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/findinpage/findinpage-ext/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/findinpage/findinpage-ext/compare/v1.0.3...v1.0.5
