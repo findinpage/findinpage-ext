@@ -20,6 +20,45 @@
 - **Package the Firefox extension**: `pnpm zip:firefox`
 - **Tests**: Run `pnpm test` for the Vitest/jsdom search and highlighting suite. Before submitting changes, also run `pnpm compile` and `pnpm build`, then manually verify any affected extension interactions.
 
+### Release Checklist
+
+For each bug fix, increment the patch version and update the dated entry in
+`CHANGELOG.md` on the issue branch before its pull request is merged to `main`.
+Follow the workspace-level issue workflow and keep the issue open until the
+published release and website update have both been verified.
+
+Before opening or merging the extension pull request, run:
+
+```bash
+pnpm compile
+pnpm test
+pnpm build
+pnpm build:firefox
+pnpm build:demo
+pnpm zip
+pnpm zip:firefox
+```
+
+When Safari code or packaging changes, also run `pnpm build:safari` and the
+applicable Xcode build verification on macOS. Installable Safari releases must
+come from the signed Xcode Cloud/TestFlight workflow; do not publish an
+unsigned Safari intermediate bundle as an installable release.
+
+Create the `vX.Y.Z` tag and GitHub Release from the merged `main` commit. The
+release is complete only when all six expected assets are present:
+
+- `findinpage-X.Y.Z-chrome.zip`
+- `findinpage-X.Y.Z-firefox.zip`
+- `findinpage-X.Y.Z-sources.zip`
+- `findinpage-demo.js`
+- `manifest.json`
+- `SHA256SUMS.txt`
+
+Verify the version in both browser-package manifests, verify every asset is
+downloadable, and compare its SHA-256 digest with `SHA256SUMS.txt`. Confirm the
+release workflow and website artifact dispatch completed; if dispatch did not
+create a website pull request, use the workspace workflow's manual fallback.
+
 ## 3. Keyboard Shortcuts
 
 | macOS | Windows/Linux | Description |
