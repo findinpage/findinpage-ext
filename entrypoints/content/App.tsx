@@ -653,6 +653,8 @@ export function App({
             if (node.nodeType !== 1) return false;
             const element = node as Element;
             return isInsideExtensionUi(element) ||
+              element.hasAttribute('data-findinpage-top-layer') ||
+              element.hasAttribute('data-findinpage-top-layer-style') ||
               element.hasAttribute('data-findinpage-highlight') ||
               element.hasAttribute('data-findinpage-fallback') ||
               element.hasAttribute('data-findinpage-control-mirror');

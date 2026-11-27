@@ -477,6 +477,9 @@ export default defineContentScript({
       const restoreSamePage = Boolean(
         savedSession.searchUrl && currentUrl === savedSession.searchUrl,
       );
+      if (savedSession.isOpen) {
+        topLayerHostController?.promote('session-restore');
+      }
       appHandle.restoreSession(
         savedSession.query,
         savedSession.searchOptions,
@@ -541,9 +544,15 @@ export default defineContentScript({
         shadowHost.style.setProperty('zoom', '1');
 
         topLayerHostController?.destroy();
-        topLayerHostController = keepPopoverHostOnTop(shadowHost, (trigger) => {
-          logContentDebug('ui.host.promoted', { trigger });
-        });
+        topLayerHostController = keepPopoverHostOnTop(
+          shadowHost,
+          (trigger) => {
+            logContentDebug('ui.host.promoted', { trigger });
+          },
+          (trigger) => {
+            logContentDebug('ui.host.demoted', { trigger });
+          },
+        );
 
         const root = createRoot(container);
         root.render(
@@ -556,6 +565,7 @@ export default defineContentScript({
               onOpenChange={(isOpen) => {
                 logContentDebug('panel.open-change', { isOpen });
                 if (isOpen) topLayerHostController?.promote('panel-opened');
+                else topLayerHostController?.demote('panel-closed');
                 updateSearchSession({ isOpen });
               }}
               onQueryChange={(query, searchOptions) => updateSearchSession({
