@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-27
+
+### Added
+
+- Added a global **Show search results list** setting (enabled by default) so
+  users can switch to a compact count-only search bar that hides result
+  excerpts while keeping match counts (`0/0` when no matches are found),
+  navigation controls, search options, and keyboard shortcuts.
+- Added a compact bottom toggle bar when results are present and the results
+  list setting is enabled, allowing users to quickly collapse or expand the
+  results list without changing the global setting.
+- Added a **Settings** entry inside the `Aa` search options popover to open the
+  extension settings page directly.
+
 ## [1.0.8] - 2026-10-18
 
 ### Fixed
@@ -94,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added localized settings, light and dark themes, and per-tab search-session
   restoration across page refreshes.
 
+[1.1.0]: https://github.com/findinpage/findinpage-ext/compare/v1.0.8...v1.1.0
 [1.0.8]: https://github.com/findinpage/findinpage-ext/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/findinpage/findinpage-ext/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/findinpage/findinpage-ext/compare/v1.0.5...v1.0.6

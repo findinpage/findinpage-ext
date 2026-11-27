@@ -43,6 +43,7 @@ select:focus-visible, a:focus-visible { outline: 3px solid #1a73e8; outline-offs
 .saved-status { min-width: 60px; color: #15803d; font-size: 13px; }
 .theme-saved-status { display: block; min-height: 16px; margin-top: 7px; }
 .switch-setting { display: flex; width: min(100%, 600px); align-items: center; justify-content: space-between; gap: 24px; margin: 0; cursor: pointer; }
+.switch-setting + .switch-setting { margin-top: 18px; }
 .switch-setting > span:first-child { min-width: 0; }
 .switch-setting strong { display: block; font-size: 14px; }
 .switch-setting small { display: block; margin-top: 5px; color: #71717a; font-size: 13px; font-weight: 400; line-height: 1.5; }

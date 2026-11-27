@@ -36,6 +36,11 @@ import {
   loadKeepHighlightsOnClose,
   normalizeKeepHighlightsOnClose,
 } from '@/lib/highlight-preference';
+import {
+  loadShowResultsList,
+  normalizeShowResultsList,
+  SHOW_RESULTS_LIST_STORAGE_KEY,
+} from '@/lib/results-preference';
 import { logContentDebug } from '@/lib/debug-log';
 import { isSearchableDocumentContentType } from '@/lib/searchable-document';
 import { keepPopoverHostOnTop, type TopLayerHostController } from '@/lib/top-layer-host';
@@ -103,16 +108,32 @@ function updateSearchSession(patch: SearchSessionPatch): void {
   })();
 }
 
+function openOptionsPage(): void {
+  void (async () => {
+    try {
+      await browser.runtime.sendMessage({ type: 'OPEN_OPTIONS_PAGE' });
+    } catch {
+      // Ignore if the extension context was invalidated.
+    }
+  })();
+}
+
 function LocalizedApp({
   initialKeepHighlightsOnClose,
+  initialShowResultsList,
   ...props
-}: Omit<React.ComponentProps<typeof App>, 'locale' | 'keepHighlightsOnClose'> & {
+}: Omit<
+  React.ComponentProps<typeof App>,
+  'locale' | 'keepHighlightsOnClose' | 'showResultsList' | 'onOpenSettings'
+> & {
   initialKeepHighlightsOnClose: boolean;
+  initialShowResultsList: boolean;
 }) {
   const [locale, setLocale] = useState<SupportedLocale>(getBrowserLocale());
   const [keepHighlightsOnClose, setKeepHighlightsOnClose] = useState(
     initialKeepHighlightsOnClose,
   );
+  const [showResultsList, setShowResultsList] = useState(initialShowResultsList);
 
   useEffect(() => {
     let active = true;
@@ -121,6 +142,9 @@ function LocalizedApp({
     });
     void loadKeepHighlightsOnClose().then((keepHighlights) => {
       if (active) setKeepHighlightsOnClose(keepHighlights);
+    });
+    void loadShowResultsList().then((showResults) => {
+      if (active) setShowResultsList(showResults);
     });
     const onStorageChange = (
       changes: Record<string, Browser.storage.StorageChange>,
@@ -133,6 +157,11 @@ function LocalizedApp({
       if (changes[KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY]) {
         setKeepHighlightsOnClose(normalizeKeepHighlightsOnClose(
           changes[KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY].newValue,
+        ));
+      }
+      if (changes[SHOW_RESULTS_LIST_STORAGE_KEY]) {
+        setShowResultsList(normalizeShowResultsList(
+          changes[SHOW_RESULTS_LIST_STORAGE_KEY].newValue,
         ));
       }
     };
@@ -152,6 +181,8 @@ function LocalizedApp({
       {...props}
       locale={locale}
       keepHighlightsOnClose={keepHighlightsOnClose}
+      showResultsList={showResultsList}
+      onOpenSettings={openOptionsPage}
     />
   );
 }
@@ -519,6 +550,7 @@ export default defineContentScript({
           <React.StrictMode>
             <LocalizedApp
               initialKeepHighlightsOnClose={false}
+              initialShowResultsList={true}
               searchOptionsStore={extensionSearchOptionsStore}
               onDebugEvent={logContentDebug}
               onOpenChange={(isOpen) => {

@@ -643,4 +643,214 @@ describe('App close and reopen', () => {
     expect(select).not.toHaveBeenCalled();
     expect(container.querySelector('.findinpage-counter')?.textContent).toBe('0/3');
   });
+
+  it('hides the results list and bottom toggle when showResultsList is disabled while preserving count and navigation', () => {
+    mockSearch(true);
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          showResultsList={false}
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+    act(() => {
+      handle.openAndFocus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    expect(container.querySelector('#findinpage-results')).toBeNull();
+    expect(container.querySelector('.findinpage-results-toggle')).toBeNull();
+    expect(container.querySelector('.findinpage-panel')?.getAttribute('data-results-visible')).toBe('false');
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('1/3');
+
+    act(() => {
+      const nextButton = container.querySelector<HTMLButtonElement>('[aria-label="Next result"]');
+      nextButton?.click();
+    });
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('2/3');
+
+    act(() => {
+      handle.navigate(1);
+    });
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('3/3');
+  });
+
+  it('shows 0/0 in count-only mode when query has no matches and hides the bottom toggle', () => {
+    vi.spyOn(PageSearch.prototype, 'select').mockReturnValue(true);
+    const emptyResponse: SearchResponse = {
+      results: [],
+      durationMs: 1,
+      complete: true,
+      highlightMode: 'native',
+    };
+    const emptyTask: SearchTask = {
+      id: 1,
+      cancel: vi.fn(),
+      done: Promise.resolve(emptyResponse),
+    };
+    vi.spyOn(PageSearch.prototype, 'search').mockImplementation((_query, _options, onUpdate) => {
+      onUpdate?.(emptyResponse);
+      return emptyTask;
+    });
+
+    const onReady = (readyHandle: FindInPageHandle) => {
+      handle = readyHandle;
+    };
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="missing"
+          showResultsList={false}
+          onReady={onReady}
+        />,
+      );
+    });
+    act(() => {
+      handle.openAndFocus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    expect(container.querySelector('#findinpage-results')).toBeNull();
+    expect(container.querySelector('.findinpage-counter')?.textContent).toBe('0/0');
+    expect(container.querySelector('.findinpage-results-toggle')).toBeNull();
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="missing"
+          showResultsList={true}
+          onReady={onReady}
+        />,
+      );
+    });
+    expect(container.querySelector('#findinpage-results')).not.toBeNull();
+    expect(container.querySelector('.findinpage-counter')).toBeNull();
+    expect(container.querySelector('.findinpage-results-toggle')).toBeNull();
+  });
+
+  it('collapses and expands results from the bottom toggle when showResultsList is enabled and resets when disabled', () => {
+    mockSearch(true);
+    const onDebugEvent = vi.fn();
+    const onReady = (readyHandle: FindInPageHandle) => {
+      handle = readyHandle;
+    };
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          showResultsList={true}
+          onDebugEvent={onDebugEvent}
+          onReady={onReady}
+        />,
+      );
+    });
+    act(() => {
+      handle.openAndFocus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    expect(container.querySelector('#findinpage-results')).not.toBeNull();
+    const collapseButton = container.querySelector<HTMLButtonElement>('.findinpage-results-toggle');
+    expect(collapseButton).not.toBeNull();
+    expect(collapseButton?.getAttribute('aria-expanded')).toBe('true');
+    expect(collapseButton?.getAttribute('aria-label')).toBe('Collapse results');
+
+    act(() => {
+      collapseButton?.click();
+      vi.runAllTimers();
+    });
+    expect(container.querySelector('#findinpage-results')).toBeNull();
+    expect(container.querySelector('.findinpage-panel')?.getAttribute('data-results-visible')).toBe('false');
+    expect(onDebugEvent).toHaveBeenCalledWith('ui.results-list.toggled', {
+      collapsed: true,
+      resultsVisible: false,
+      source: 'panel-toggle',
+      resultCount: 3,
+    });
+    expect(handle.isSearchInputFocused()).toBe(true);
+
+    const expandButton = container.querySelector<HTMLButtonElement>('.findinpage-results-toggle');
+    expect(expandButton).not.toBeNull();
+    expect(expandButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(expandButton?.getAttribute('aria-label')).toBe('Expand results');
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          showResultsList={false}
+          onDebugEvent={onDebugEvent}
+          onReady={onReady}
+        />,
+      );
+    });
+    expect(container.querySelector('#findinpage-results')).toBeNull();
+    expect(container.querySelector('.findinpage-results-toggle')).toBeNull();
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          showResultsList={true}
+          onDebugEvent={onDebugEvent}
+          onReady={onReady}
+        />,
+      );
+    });
+    expect(container.querySelector('#findinpage-results')).not.toBeNull();
+    expect(container.querySelector('.findinpage-results-toggle')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('opens settings from the search options popover when onOpenSettings is provided', () => {
+    mockSearch(true);
+    const onOpenSettings = vi.fn();
+    const onDebugEvent = vi.fn();
+
+    act(() => {
+      root.render(
+        <App
+          initialQuery="needle"
+          onOpenSettings={onOpenSettings}
+          onDebugEvent={onDebugEvent}
+          onReady={(readyHandle) => {
+            handle = readyHandle;
+          }}
+        />,
+      );
+    });
+    act(() => {
+      handle.openAndFocus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('.findinpage-options-trigger');
+    act(() => {
+      trigger?.click();
+    });
+
+    const settingsButton = container.querySelector<HTMLButtonElement>('.findinpage-options-action');
+    expect(settingsButton).not.toBeNull();
+    expect(settingsButton?.textContent).toContain('Settings');
+
+    act(() => {
+      settingsButton?.click();
+    });
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+    expect(onDebugEvent).toHaveBeenCalledWith('ui.options.open-settings', undefined);
+  });
 });

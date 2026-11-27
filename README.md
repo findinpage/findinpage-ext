@@ -66,9 +66,15 @@ The extension UI is built with WXT, React, Tailwind CSS, and locally owned Shadc
 
 ## Settings
 
-Open the extension's settings page to choose its display language, follow the
-website's appearance (with a system fallback), force a light or dark theme, and
-configure search behavior. **Keep results highlighted after closing** leaves
+Open the extension's settings page (or choose **Settings** from the `Aa` Search
+options menu) to choose its display language, follow the website's appearance
+(with a system fallback), force a light or dark theme, and configure search
+behavior. **Show search results list** is on by default; turning it off switches
+Find in Page to a compact count-only bar without result excerpts or the bottom
+collapse/expand bar while keeping match counts, navigation controls, and
+keyboard shortcuts. When the setting is on and matches are found, a compact bar
+at the bottom of the panel lets you quickly collapse or expand the results list.
+**Keep results highlighted after closing** leaves
 the current matches and active result highlighted when the panel closes. It is
 off by default, and changes apply immediately to every open tab. The preference
 does not store the query, results, or page content.
