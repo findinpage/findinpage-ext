@@ -32,9 +32,17 @@ import {
   type ThemePreference,
 } from '@/lib/theme';
 import {
+  KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY,
   loadKeepHighlightsOnClose,
+  normalizeKeepHighlightsOnClose,
   saveKeepHighlightsOnClose,
 } from '@/lib/highlight-preference';
+import {
+  loadShowResultsList,
+  normalizeShowResultsList,
+  saveShowResultsList,
+  SHOW_RESULTS_LIST_STORAGE_KEY,
+} from '@/lib/results-preference';
 import {
   clearDebugEntries,
   DEBUG_LOG_STORAGE_KEY,
@@ -51,6 +59,7 @@ const CHROME_REVIEW_URL = 'https://chromewebstore.google.com/detail/find-in-page
 function OptionsApp() {
   const [preference, setPreference] = useState<LocalePreference>('auto');
   const [themePreference, setThemePreference] = useState<ThemePreference>('system');
+  const [showResultsList, setShowResultsList] = useState(true);
   const [keepHighlightsOnClose, setKeepHighlightsOnClose] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [debugEnabled, setDebugEnabled] = useState(false);
@@ -68,12 +77,14 @@ function OptionsApp() {
     void Promise.all([
       loadLocalePreference(),
       loadThemePreference(),
+      loadShowResultsList(),
       loadKeepHighlightsOnClose(),
       loadDebugEnabled(),
       loadDebugEntries(),
-    ]).then(([localeValue, themeValue, keepHighlights, debug, entries]) => {
+    ]).then(([localeValue, themeValue, showResults, keepHighlights, debug, entries]) => {
       setPreference(localeValue);
       setThemePreference(themeValue);
+      setShowResultsList(showResults);
       setKeepHighlightsOnClose(keepHighlights);
       setDebugEnabled(debug);
       setDebugEntries(entries);
@@ -82,9 +93,22 @@ function OptionsApp() {
   }, []);
 
   useEffect(() => {
-    const onStorageChange = (changes: Record<string, Browser.storage.StorageChange>) => {
-      if (!changes[DEBUG_LOG_STORAGE_KEY]) return;
-      void loadDebugEntries().then(setDebugEntries);
+    const onStorageChange = (
+      changes: Record<string, Browser.storage.StorageChange>,
+      areaName: string,
+    ) => {
+      if (areaName !== 'local') return;
+      if (changes[SHOW_RESULTS_LIST_STORAGE_KEY]) {
+        setShowResultsList(normalizeShowResultsList(changes[SHOW_RESULTS_LIST_STORAGE_KEY].newValue));
+      }
+      if (changes[KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY]) {
+        setKeepHighlightsOnClose(normalizeKeepHighlightsOnClose(
+          changes[KEEP_HIGHLIGHTS_ON_CLOSE_STORAGE_KEY].newValue,
+        ));
+      }
+      if (changes[DEBUG_LOG_STORAGE_KEY]) {
+        void loadDebugEntries().then(setDebugEntries);
+      }
     };
     browser.storage.onChanged.addListener(onStorageChange);
     return () => browser.storage.onChanged.removeListener(onStorageChange);
@@ -120,6 +144,14 @@ function OptionsApp() {
     setSavedSetting(null);
     await saveThemePreference(value);
     setSavedSetting('theme');
+    window.setTimeout(() => setSavedSetting(null), 1600);
+  };
+
+  const updateShowResultsList = async (value: boolean) => {
+    setShowResultsList(value);
+    setSavedSetting(null);
+    await saveShowResultsList(value);
+    setSavedSetting('behavior');
     window.setTimeout(() => setSavedSetting(null), 1600);
   };
 
@@ -227,6 +259,19 @@ function OptionsApp() {
           <Highlighter aria-hidden="true" />
           <h2 id="behavior-heading">{t('behaviorHeading')}</h2>
         </div>
+        <label className="switch-setting">
+          <span>
+            <strong>{t('showResultsList')}</strong>
+            <small>{t('showResultsListHelp')}</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={showResultsList}
+            disabled={!loaded}
+            onChange={(event) => void updateShowResultsList(event.target.checked)}
+          />
+          <span className="switch-control" aria-hidden="true" />
+        </label>
         <label className="switch-setting">
           <span>
             <strong>{t('keepHighlightsOnClose')}</strong>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Asterisk, CaseSensitive, Check, ChevronDown, ChevronUp, Search, WholeWord, X } from 'lucide-react';
+import { Asterisk, CaseSensitive, Check, ChevronDown, ChevronUp, Search, Settings, WholeWord, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -91,6 +91,8 @@ interface AppProps {
   };
   searchOptionsStore?: SearchOptionsStore;
   keepHighlightsOnClose?: boolean;
+  showResultsList?: boolean;
+  onOpenSettings?(): void;
   locale?: SupportedLocale;
 }
 
@@ -107,6 +109,8 @@ export function App({
   installAction,
   searchOptionsStore,
   keepHighlightsOnClose = false,
+  showResultsList = true,
+  onOpenSettings,
   locale = getBrowserLocale(),
 }: AppProps) {
   const t = useCallback(
@@ -123,7 +127,9 @@ export function App({
   const [isSearching, setIsSearching] = useState(false);
   const [highlightMode, setHighlightMode] = useState<HighlightMode>('native');
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [results, setResults] = useState<SearchResultView[]>([]);
+  const resultsVisible = showResultsList && !resultsCollapsed;
   const [activeId, setActiveId] = useState<string>();
   const panelRef = useRef<HTMLElement>(null);
   const optionsOpenRef = useRef(false);
@@ -259,6 +265,10 @@ export function App({
   }, [deferHighlightUpdate, keepHighlightsOnClose, onOpenChange, setPanelVisibility]);
 
   useEffect(() => {
+    if (!showResultsList) setResultsCollapsed(false);
+  }, [showResultsList]);
+
+  useEffect(() => {
     if (isOpenRef.current) return;
     if (keepHighlightsOnClose) searchRef.current.restoreHighlights(activeId);
     else searchRef.current.hideHighlights();
@@ -349,6 +359,9 @@ export function App({
         const rect = panel.getBoundingClientRect();
         return {
           open: isOpenRef.current,
+          showResultsList,
+          resultsCollapsed,
+          resultsVisible,
           connected: panel.isConnected,
           dataOpen: panel.dataset.open,
           ariaHidden: panel.getAttribute('aria-hidden'),
@@ -377,7 +390,7 @@ export function App({
       },
     };
     onReady(handle);
-  }, [activeId, close, debug, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onOpenChange, onReady, setOptionsVisibility, setPanelVisibility]);
+  }, [activeId, close, debug, deferHighlightUpdate, focusInput, focusInputWithoutSelection, onOpenChange, onReady, resultsCollapsed, resultsVisible, setOptionsVisibility, setPanelVisibility, showResultsList]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -836,7 +849,7 @@ export function App({
   };
 
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || !resultsVisible) return;
     if (pendingResultsScrollTopRef.current !== undefined) {
       const scrollTop = pendingResultsScrollTopRef.current;
       pendingResultsScrollTopRef.current = undefined;
@@ -870,13 +883,14 @@ export function App({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [activeId, resultVirtualizer, results]);
+  }, [activeId, resultVirtualizer, results, resultsVisible]);
 
   const hasQuery = query.length > 0;
   const hasActiveSearchOptions = Object.values(searchOptions).some(Boolean);
   const activeIndex = results.findIndex((result) => result.id === activeId);
   const currentResult = activeIndex >= 0 ? activeIndex + 1 : 0;
   const totalResults = String(results.length);
+  const showCounter = results.length > 0 || (!resultsVisible && hasQuery && !searchError);
   const navigationDisabled = results.length === 0;
   const activeOptionId = activeId ? `findinpage-result-${activeId}` : undefined;
   const searchStatus = searchError
@@ -950,6 +964,7 @@ export function App({
       aria-label={t('panelLabel')}
       aria-hidden={!isOpen}
       data-open={isOpen}
+      data-results-visible={resultsVisible}
       inert={isOpen ? undefined : true}
       onPointerDownCapture={(event) => logUiEvent(event, 'pointerdown')}
       onClickCapture={(event) => logUiEvent(event, 'click')}
@@ -967,9 +982,9 @@ export function App({
             role="combobox"
             aria-label={t('searchLabel')}
             aria-autocomplete="none"
-            aria-controls="findinpage-results"
-            aria-expanded={results.length > 0}
-            aria-activedescendant={activeOptionId}
+            aria-controls={resultsVisible ? 'findinpage-results' : undefined}
+            aria-expanded={resultsVisible && results.length > 0}
+            aria-activedescendant={resultsVisible ? activeOptionId : undefined}
             aria-keyshortcuts="Enter ArrowUp ArrowDown"
             aria-invalid={searchError ? true : undefined}
             aria-describedby={searchError ? 'findinpage-search-error' : undefined}
@@ -988,7 +1003,7 @@ export function App({
               onQueryChange?.(event.target.value, searchOptions);
             }}
           />
-          {results.length > 0 && (
+          {showCounter && (
             <span
               className="findinpage-counter"
               aria-hidden="true"
@@ -1040,6 +1055,23 @@ export function App({
                   </Toggle>
                 ))}
               </div>
+              {onOpenSettings && (
+                <>
+                  <div className="findinpage-options-divider" role="separator" />
+                  <button
+                    type="button"
+                    className="findinpage-options-action"
+                    onClick={() => {
+                      debug('ui.options.open-settings');
+                      setOptionsVisibility(false);
+                      onOpenSettings();
+                    }}
+                  >
+                    <Settings data-icon="inline-start" aria-hidden="true" />
+                    <span>{t('openSettings')}</span>
+                  </button>
+                </>
+              )}
             </PopoverContent>
           </Popover>
         </div>
@@ -1087,86 +1119,88 @@ export function App({
         </p>
       )}
 
-      <div
-        id="findinpage-results"
-        ref={resultsRef}
-        className="findinpage-results"
-        role={results.length > 0 ? 'listbox' : undefined}
-        aria-label={t('resultsLabel')}
-      >
-        {!hasQuery && (
-          <div className="findinpage-empty">
-            <div className="findinpage-empty-icon" aria-hidden="true">
-              <Search />
+      {resultsVisible && (
+        <div
+          id="findinpage-results"
+          ref={resultsRef}
+          className="findinpage-results"
+          role={results.length > 0 ? 'listbox' : undefined}
+          aria-label={t('resultsLabel')}
+        >
+          {!hasQuery && (
+            <div className="findinpage-empty">
+              <div className="findinpage-empty-icon" aria-hidden="true">
+                <Search />
+              </div>
+              <p className="findinpage-empty-copy">
+                {t('emptyHint')}
+              </p>
             </div>
-            <p className="findinpage-empty-copy">
-              {t('emptyHint')}
-            </p>
-          </div>
-        )}
+          )}
 
-        {hasQuery && !searchError && results.length === 0 && (
-          <div className="findinpage-empty findinpage-empty--compact">
-            <p className="findinpage-empty-copy">
-              {isSearching ? t('searchingPage') : t('noMatches')}
-            </p>
-          </div>
-        )}
+          {hasQuery && !searchError && results.length === 0 && (
+            <div className="findinpage-empty findinpage-empty--compact">
+              <p className="findinpage-empty-copy">
+                {isSearching ? t('searchingPage') : t('noMatches')}
+              </p>
+            </div>
+          )}
 
-        {results.length > 0 && (
-          <div
-            className="findinpage-results-virtual"
-            role="presentation"
-            style={{ height: `${resultVirtualizer.getTotalSize()}px` }}
-          >
-            {resultVirtualizer.getVirtualItems().map((virtualItem) => {
-              const result = results[virtualItem.index];
-              return (
-                <Button
-                  key={virtualItem.key}
-                  ref={resultVirtualizer.measureElement}
-                  type="button"
-                  variant="result"
-                  size="result"
-                  id={`findinpage-result-${result.id}`}
-                  role="option"
-                  tabIndex={-1}
-                  data-index={virtualItem.index}
-                  data-result-id={result.id}
-                  aria-posinset={virtualItem.index + 1}
-                  aria-setsize={results.length}
-                  aria-selected={activeId === result.id}
-                  style={{ top: `${virtualItem.start}px` }}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    if (result.id !== activeId) {
-                      skipNextResultListScrollRef.current = true;
-                    }
-                    selectResult(result, true, 'result-click');
-                    focusInputWithoutSelection();
-                  }}
-                >
-                  <span className="findinpage-index">
-                    {result.order}
-                  </span>
-                  <span className="findinpage-result-copy">
-                    {result.before}
-                    <mark
-                      className={cn(
-                        'findinpage-match',
-                        activeId === result.id && 'findinpage-match--active',
-                      )}
-                    >
-                      {result.match}
-                    </mark>
-                    {result.after}
-                  </span>
-                </Button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+          {results.length > 0 && (
+            <div
+              className="findinpage-results-virtual"
+              role="presentation"
+              style={{ height: `${resultVirtualizer.getTotalSize()}px` }}
+            >
+              {resultVirtualizer.getVirtualItems().map((virtualItem) => {
+                const result = results[virtualItem.index];
+                return (
+                  <Button
+                    key={virtualItem.key}
+                    ref={resultVirtualizer.measureElement}
+                    type="button"
+                    variant="result"
+                    size="result"
+                    id={`findinpage-result-${result.id}`}
+                    role="option"
+                    tabIndex={-1}
+                    data-index={virtualItem.index}
+                    data-result-id={result.id}
+                    aria-posinset={virtualItem.index + 1}
+                    aria-setsize={results.length}
+                    aria-selected={activeId === result.id}
+                    style={{ top: `${virtualItem.start}px` }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      if (result.id !== activeId) {
+                        skipNextResultListScrollRef.current = true;
+                      }
+                      selectResult(result, true, 'result-click');
+                      focusInputWithoutSelection();
+                    }}
+                  >
+                    <span className="findinpage-index">
+                      {result.order}
+                    </span>
+                    <span className="findinpage-result-copy">
+                      {result.before}
+                      <mark
+                        className={cn(
+                          'findinpage-match',
+                          activeId === result.id && 'findinpage-match--active',
+                        )}
+                      >
+                        {result.match}
+                      </mark>
+                      {result.after}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {(isSearching || highlightMode !== 'native') && (
         <p className="findinpage-search-note" role="status">
@@ -1174,6 +1208,35 @@ export function App({
             ? t(results.length === 1 ? 'matchesFoundOne' : 'matchesFoundMany', { count: results.length })
             : t('compatibilityHighlighting')}
         </p>
+      )}
+
+      {showResultsList && results.length > 0 && (
+        <button
+          type="button"
+          className="findinpage-results-toggle"
+          aria-expanded={resultsVisible}
+          aria-controls={resultsVisible ? 'findinpage-results' : undefined}
+          aria-label={resultsVisible ? t('collapseResults') : t('expandResults')}
+          title={resultsVisible ? t('collapseResults') : t('expandResults')}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            const nextCollapsed = !resultsCollapsed;
+            debug('ui.results-list.toggled', {
+              collapsed: nextCollapsed,
+              resultsVisible: !nextCollapsed,
+              source: 'panel-toggle',
+              resultCount: results.length,
+            });
+            setResultsCollapsed(nextCollapsed);
+            focusInputWithoutSelection();
+          }}
+        >
+          {resultsVisible ? (
+            <ChevronUp aria-hidden="true" />
+          ) : (
+            <ChevronDown aria-hidden="true" />
+          )}
+        </button>
       )}
 
       {installAction && (

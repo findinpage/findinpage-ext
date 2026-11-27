@@ -20,6 +20,14 @@ type FindInPageResponse = {
   ok: true;
 };
 
+type OpenOptionsPageMessage = {
+  type: 'OPEN_OPTIONS_PAGE';
+};
+
+type OpenOptionsPageResponse = {
+  ok: boolean;
+};
+
 const TOOLBAR_TOGGLE_EVENT = 'findinpage:toolbar-toggle';
 
 export default defineBackground(() => {
@@ -73,6 +81,16 @@ export default defineBackground(() => {
     });
     return undefined;
   });
+
+  browser.runtime.onMessage.addListener(
+    (message: OpenOptionsPageMessage, sender): Promise<OpenOptionsPageResponse> | undefined => {
+      if (message.type !== 'OPEN_OPTIONS_PAGE') return undefined;
+      logBackground('options.open', undefined, sender.tab?.id);
+      return browser.runtime.openOptionsPage()
+        .then(() => ({ ok: true }))
+        .catch(() => ({ ok: false }));
+    },
+  );
 
   const toggleFindInPage = async (tabId: number) => {
     const response = await browser.tabs.sendMessage(tabId, {
